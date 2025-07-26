@@ -5,8 +5,8 @@ exclude_dirs = .git,.vscode,__pycache__,.terraform,venv,.venv
 # Skip certain tests that may cause false positives in infrastructure code
 skips = B101,B603,B607,B404,B110
 
-# Confidence levels: LOW, MEDIUM, HIGH
-confidence = MEDIUM
+# Confidence levels: 1=LOW, 2=MEDIUM, 3=HIGH
+confidence = 2
 
-# Severity levels: LOW, MEDIUM, HIGH  
-severity = MEDIUM
+# Severity levels: 1=LOW, 2=MEDIUM, 3=HIGH  
+severity = 2

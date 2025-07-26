@@ -357,7 +357,7 @@ def main():
         
         else:
             # JSON output - sanitize sensitive data before output
-            sanitized_data = checker.sanitize_cluster_data(cluster_data)
+            sanitized_data = scanner.sanitize_cluster_data(cluster_data)
             output = json.dumps(sanitized_data, indent=2, default=str)
             
             if args.output:
