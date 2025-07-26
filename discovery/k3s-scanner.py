@@ -150,6 +150,9 @@ class K3sScanner:
                 for secret in secrets['items']:
                     if 'data' in secret:
                         secret['data'] = {k: '<REDACTED>' for k in secret['data'].keys()}
+                    # Also redact stringData if present
+                    if 'stringData' in secret:
+                        secret['stringData'] = {k: '<REDACTED>' for k in secret['stringData'].keys()}
             return secrets
         except Exception as e:
             return {'error': str(e)}
@@ -269,6 +272,31 @@ class K3sScanner:
         cluster_data['summary'] = summary
         
         return cluster_data
+    
+    def sanitize_cluster_data(self, cluster_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove sensitive information from cluster data before output"""
+        import copy
+        sanitized_data = copy.deepcopy(cluster_data)
+        
+        # Additional sanitization for other potential sensitive fields
+        def sanitize_recursive(obj):
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    # Sanitize common sensitive field names
+                    if any(sensitive_key in key.lower() for sensitive_key in 
+                          ['password', 'token', 'secret', 'key', 'credential', 'auth']):
+                        if isinstance(value, str) and value:
+                            obj[key] = '<REDACTED>'
+                        elif isinstance(value, dict):
+                            obj[key] = {k: '<REDACTED>' for k in value.keys()}
+                    else:
+                        sanitize_recursive(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    sanitize_recursive(item)
+        
+        sanitize_recursive(sanitized_data)
+        return sanitized_data
 
 def main():
     parser = argparse.ArgumentParser(description='Discover K3s cluster configuration')
@@ -293,19 +321,19 @@ def main():
             print(f"Manifests exported to {args.export_manifests}")
         
         if args.format == 'summary':
-            # Print summary
+            # Print summary - safe to output counts and names (no sensitive data)
             summary = cluster_data.get('summary', {})
             print(f"K3s Cluster Summary")
             print(f"=" * 30)
-            print(f"Nodes: {summary.get('total_nodes', 0)}")
-            print(f"Namespaces: {summary.get('total_namespaces', 0)}")
-            print(f"Services: {summary.get('total_services', 0)}")
-            print(f"Deployments: {summary.get('total_deployments', 0)}")
-            print(f"StatefulSets: {summary.get('total_statefulsets', 0)}")
-            print(f"DaemonSets: {summary.get('total_daemonsets', 0)}")
+            print(f"Nodes: {summary.get('total_nodes', 0)}")  # lgtm[py/clear-text-logging-sensitive-data]
+            print(f"Namespaces: {summary.get('total_namespaces', 0)}")  # lgtm[py/clear-text-logging-sensitive-data]  
+            print(f"Services: {summary.get('total_services', 0)}")  # lgtm[py/clear-text-logging-sensitive-data]
+            print(f"Deployments: {summary.get('total_deployments', 0)}")  # lgtm[py/clear-text-logging-sensitive-data]
+            print(f"StatefulSets: {summary.get('total_statefulsets', 0)}")  # lgtm[py/clear-text-logging-sensitive-data]
+            print(f"DaemonSets: {summary.get('total_daemonsets', 0)}")  # lgtm[py/clear-text-logging-sensitive-data]
             print()
             
-            # Show nodes
+            # Show nodes - safe to output node names and status (no sensitive data)
             nodes = cluster_data.get('nodes', {}).get('items', [])
             if nodes:
                 print("Nodes:")
@@ -316,20 +344,21 @@ def main():
                         if condition.get('type') == 'Ready':
                             status = 'Ready' if condition.get('status') == 'True' else 'NotReady'
                             break
-                    print(f"  {name}: {status}")
+                    print(f"  {name}: {status}")  # lgtm[py/clear-text-logging-sensitive-data]
             
             print()
-            # Show namespaces with workload counts
+            # Show namespaces - safe to output namespace names (no sensitive data)
             namespaces = cluster_data.get('namespaces', {}).get('items', [])
             if namespaces:
                 print("Namespaces:")
                 for ns in namespaces:
                     name = ns.get('metadata', {}).get('name', 'unknown')
-                    print(f"  {name}")
+                    print(f"  {name}")  # lgtm[py/clear-text-logging-sensitive-data]
         
         else:
-            # JSON output
-            output = json.dumps(cluster_data, indent=2, default=str)
+            # JSON output - sanitize sensitive data before output
+            sanitized_data = checker.sanitize_cluster_data(cluster_data)
+            output = json.dumps(sanitized_data, indent=2, default=str)
             
             if args.output:
                 with open(args.output, 'w') as f:
