@@ -27,7 +27,7 @@ jobs:
       uses: trufflesecurity/trufflehog@main
       with:
         path: ./
-        extra_args: --debug --only-verified --no-update
+        extra_args: --debug --only-verified
 
   python-security:
     name: Python Security Scan
