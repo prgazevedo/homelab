@@ -1,0 +1,87 @@
+groups:
+  - name: homelab.rules
+    rules:
+      # Node health alerts
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.instance }} is down"
+          description: "Node {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% for more than 5 minutes on {{ $labels.instance }}."
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk usage is above 85% on {{ $labels.instance }} filesystem {{ $labels.mountpoint }}."
+
+      # Kubernetes cluster alerts
+      - alert: KubernetesNodeReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kubernetes node {{ $labels.node }} is not ready"
+          description: "Kubernetes node {{ $labels.node }} has been not ready for more than 2 minutes."
+
+      - alert: KubernetesPodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently."
+
+      - alert: KubernetesPodNotReady
+        expr: kube_pod_status_ready{condition="false"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} is not ready"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for more than 5 minutes."
+
+      # Proxmox specific alerts
+      - alert: ProxmoxNodeDown
+        expr: up{job="proxmox"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxmox node {{ $labels.instance }} is down"
+          description: "Proxmox node {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+      # Storage alerts
+      - alert: ProxmoxStorageLow
+        expr: (proxmox_storage_size_bytes - proxmox_storage_used_bytes) / proxmox_storage_size_bytes * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Proxmox storage {{ $labels.storage }} is running low"
+          description: "Storage {{ $labels.storage }} on {{ $labels.instance }} has less than 15% free space."
