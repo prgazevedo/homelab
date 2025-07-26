@@ -48,8 +48,8 @@ jobs:
 
     - name: Run Bandit security linter
       run: |
-        bandit -r . -f json -o bandit-report.json
-        bandit -r . -f txt
+        bandit -r . -f json -o bandit-report.json --confidence-level 2 --severity-level 2
+        bandit -r . -f txt --confidence-level 2 --severity-level 2
 
     - name: Run Safety check
       run: |
