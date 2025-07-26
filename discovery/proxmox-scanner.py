@@ -29,7 +29,7 @@ class ProxmoxScanner:
         }
         
         try:
-            response = requests.post(auth_url, data=auth_data, verify=self.verify_ssl)
+            response = requests.post(auth_url, data=auth_data, verify=self.verify_ssl, timeout=30)
             response.raise_for_status()
             
             auth_result = response.json()
@@ -57,7 +57,7 @@ class ProxmoxScanner:
         }
         
         url = f"{self.base_url}{endpoint}"
-        response = requests.get(url, headers=headers, cookies=cookies, verify=self.verify_ssl)
+        response = requests.get(url, headers=headers, cookies=cookies, verify=self.verify_ssl, timeout=30)
         response.raise_for_status()
         
         return response.json()

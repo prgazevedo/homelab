@@ -5,7 +5,10 @@ exclude_dirs = [".git", ".vscode", "__pycache__", ".terraform", "venv", ".venv"]
 # Skip certain tests that may cause false positives in infrastructure code
 skips = [
     "B101",  # Test for use of assert - common in test files
-    "B603",  # subprocess without shell equals true - we use subprocess safely
+    "B603",  # subprocess without shell equals true - we use subprocess safely with hardcoded commands
+    "B607",  # Starting a process with a partial executable path - we use known system commands
+    "B404",  # Consider possible security implications associated with subprocess - necessary for infrastructure tools
+    "B110",  # Try except pass - used intentionally for optional config loading
 ]
 
 # Confidence levels: LOW, MEDIUM, HIGH

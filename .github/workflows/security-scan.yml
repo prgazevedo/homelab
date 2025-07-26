@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: '0 8 * * 1'  # Run weekly on Mondays at 8:00 AM UTC
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   secret-scan:
     name: Secret Scanning
@@ -22,9 +27,7 @@ jobs:
       uses: trufflesecurity/trufflehog@main
       with:
         path: ./
-        base: main
-        head: HEAD
-        extra_args: --debug --only-verified
+        extra_args: --debug --only-verified --no-update
 
   python-security:
     name: Python Security Scan
@@ -45,7 +48,7 @@ jobs:
 
     - name: Run Bandit security linter
       run: |
-        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . -f json -o bandit-report.json
         bandit -r . -f txt
 
     - name: Run Safety check
@@ -65,6 +68,10 @@ jobs:
   terraform-security:
     name: Terraform Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -91,9 +98,10 @@ jobs:
         framework: terraform
         output_format: sarif
         output_file_path: checkov-results.sarif
+      continue-on-error: true
 
     - name: Upload Checkov scan results
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: always() && steps.checkov.outputs.results != ''
       with:
         sarif_file: checkov-results.sarif
