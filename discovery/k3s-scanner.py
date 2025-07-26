@@ -297,6 +297,21 @@ class K3sScanner:
         
         sanitize_recursive(sanitized_data)
         return sanitized_data
+    
+    def sanitize_name(self, name: str) -> str:
+        """Sanitize individual names/strings for sensitive patterns"""
+        if not name or not isinstance(name, str):
+            return name
+        
+        # Check for sensitive patterns in the name
+        sensitive_patterns = ['password', 'token', 'secret', 'key', 'credential', 'auth', 'api-key', 'oauth']
+        name_lower = name.lower()
+        
+        for pattern in sensitive_patterns:
+            if pattern in name_lower:
+                return '<REDACTED>'
+        
+        return name
 
 def main():
     parser = argparse.ArgumentParser(description='Discover K3s cluster configuration')
@@ -325,12 +340,12 @@ def main():
             summary = cluster_data.get('summary', {})
             print(f"K3s Cluster Summary")
             print(f"=" * 30)
-            print(f"Nodes: {summary.get('total_nodes', 0)}")  # codeql[py/clear-text-logging-sensitive-data]
-            print(f"Namespaces: {summary.get('total_namespaces', 0)}")  # codeql[py/clear-text-logging-sensitive-data]  
-            print(f"Services: {summary.get('total_services', 0)}")  # codeql[py/clear-text-logging-sensitive-data]
-            print(f"Deployments: {summary.get('total_deployments', 0)}")  # codeql[py/clear-text-logging-sensitive-data]
-            print(f"StatefulSets: {summary.get('total_statefulsets', 0)}")  # codeql[py/clear-text-logging-sensitive-data]
-            print(f"DaemonSets: {summary.get('total_daemonsets', 0)}")  # codeql[py/clear-text-logging-sensitive-data]
+            print(f"Nodes: {summary.get('total_nodes', 0)}")
+            print(f"Namespaces: {summary.get('total_namespaces', 0)}")
+            print(f"Services: {summary.get('total_services', 0)}")
+            print(f"Deployments: {summary.get('total_deployments', 0)}")
+            print(f"StatefulSets: {summary.get('total_statefulsets', 0)}")
+            print(f"DaemonSets: {summary.get('total_daemonsets', 0)}")
             print()
             
             # Show nodes - safe to output node names and status (no sensitive data)
@@ -339,12 +354,13 @@ def main():
                 print("Nodes:")
                 for node in nodes:
                     name = node.get('metadata', {}).get('name', 'unknown')
+                    sanitized_name = scanner.sanitize_name(name)
                     status = 'Unknown'
                     for condition in node.get('status', {}).get('conditions', []):
                         if condition.get('type') == 'Ready':
                             status = 'Ready' if condition.get('status') == 'True' else 'NotReady'
                             break
-                    print(f"  {name}: {status}")  # codeql[py/clear-text-logging-sensitive-data]
+                    print(f"  {sanitized_name}: {status}")
             
             print()
             # Show namespaces - safe to output namespace names (no sensitive data)
@@ -353,7 +369,8 @@ def main():
                 print("Namespaces:")
                 for ns in namespaces:
                     name = ns.get('metadata', {}).get('name', 'unknown')
-                    print(f"  {name}")  # codeql[py/clear-text-logging-sensitive-data]
+                    sanitized_name = scanner.sanitize_name(name)
+                    print(f"  {sanitized_name}")
         
         else:
             # JSON output - sanitize sensitive data before output
