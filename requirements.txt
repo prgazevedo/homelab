@@ -1,0 +1,18 @@
+# Python dependencies for homelab infrastructure tools
+
+# API clients and HTTP requests
+requests>=2.31.0
+aiohttp>=3.9.0
+urllib3>=2.0.0
+
+# Data processing and configuration
+PyYAML>=6.0
+json5>=0.9.0
+
+# Security and validation
+bandit>=1.7.5
+safety>=2.3.0
+
+# Infrastructure as Code
+ansible>=8.0.0
+# Note: Terraform is installed separately as a binary

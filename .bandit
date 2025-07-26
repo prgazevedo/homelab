@@ -1,0 +1,15 @@
+[bandit]
+# Bandit configuration file for security scanning
+exclude_dirs = [".git", ".vscode", "__pycache__", ".terraform", "venv", ".venv"]
+
+# Skip certain tests that may cause false positives in infrastructure code
+skips = [
+    "B101",  # Test for use of assert - common in test files
+    "B603",  # subprocess without shell equals true - we use subprocess safely
+]
+
+# Confidence levels: LOW, MEDIUM, HIGH
+confidence = MEDIUM
+
+# Severity levels: LOW, MEDIUM, HIGH  
+severity = MEDIUM
