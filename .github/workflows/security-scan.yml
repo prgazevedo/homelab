@@ -80,7 +80,7 @@ jobs:
       uses: aquasecurity/trivy-action@master
       with:
         scan-type: 'config'
-        scan-ref: './terraform'
+        scan-ref: './ansible'
         format: 'sarif'
         output: 'trivy-results.sarif'
 
@@ -94,8 +94,8 @@ jobs:
       id: checkov
       uses: bridgecrewio/checkov-action@master
       with:
-        directory: ./terraform
-        framework: terraform
+        directory: ./ansible
+        framework: ansible
         output_format: sarif
         output_file_path: checkov-results.sarif
       continue-on-error: true
