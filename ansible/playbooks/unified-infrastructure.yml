@@ -6,9 +6,8 @@
   hosts: localhost
   gather_facts: true
   vars:
-    proxmox_host: "192.168.2.100"
-    proxmox_user: "root@pam"
-    proxmox_node: "proxmox"
+    # Proxmox configuration loaded from group_vars/all.yml
+    # proxmox_host, proxmox_user, proxmox_node, proxmox_validate_certs defined there
     
   tasks:
     - name: "DISCOVER: Get Proxmox authentication ticket"
@@ -19,7 +18,7 @@
         body:
           username: "{{ proxmox_user }}"
           password: "{{ proxmox_password }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: auth_result
       no_log: true
       
@@ -36,7 +35,7 @@
         headers:
           Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
           CSRFPreventionToken: "{{ csrf_token }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: vm_list
       
     - name: "DISCOVER: Get all containers"
@@ -46,7 +45,7 @@
         headers:
           Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
           CSRFPreventionToken: "{{ csrf_token }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: container_list
 
     - name: "DISCOVER: Get storage information"
@@ -56,7 +55,7 @@
         headers:
           Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
           CSRFPreventionToken: "{{ csrf_token }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: storage_info
 
     - name: "DISCOVER: Get node information"
@@ -66,7 +65,7 @@
         headers:
           Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
           CSRFPreventionToken: "{{ csrf_token }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: node_status
 
     - name: "DISPLAY: Infrastructure Summary"

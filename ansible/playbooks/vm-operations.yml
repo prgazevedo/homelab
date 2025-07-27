@@ -6,9 +6,8 @@
   hosts: localhost
   gather_facts: false
   vars:
-    proxmox_host: "192.168.2.100"
-    proxmox_user: "root@pam"
-    proxmox_node: "proxmox"
+    # Proxmox configuration loaded from group_vars/all.yml
+    # Required variables from command line:
     # action: start, stop, restart
     # vmid: VM/Container ID
     # vm_type: qemu (VM) or lxc (container)
@@ -22,7 +21,7 @@
         body:
           username: "{{ proxmox_user }}"
           password: "{{ proxmox_password }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: auth_result
       no_log: true
       
@@ -39,7 +38,7 @@
         headers:
           Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
           CSRFPreventionToken: "{{ csrf_token }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: operation_result
       
     - name: Display operation result
@@ -53,7 +52,7 @@
         headers:
           Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
           CSRFPreventionToken: "{{ csrf_token }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: task_status
       until: task_status.json.data.status != "running"
       retries: 30

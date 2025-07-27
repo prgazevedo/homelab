@@ -6,8 +6,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    proxmox_host: "192.168.2.100"
-    proxmox_user: "root@pam"
+    # Proxmox configuration loaded from group_vars/all.yml
     # Password retrieved from keychain in wrapper script
     
   tasks:
@@ -18,7 +17,7 @@
         headers:
           Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
           CSRFPreventionToken: "{{ csrf_token }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: vm_status
       
     - name: Display VM information
@@ -33,7 +32,7 @@
         headers:
           Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
           CSRFPreventionToken: "{{ csrf_token }}"
-        validate_certs: false
+        validate_certs: "{{ proxmox_validate_certs }}"  # checkov:skip=CKV_ANSIBLE_1:Homelab self-signed certificate
       register: container_status
       
     - name: Display container information

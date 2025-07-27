@@ -1,0 +1,19 @@
+# Global Ansible variables for homelab infrastructure
+# Security configuration for Proxmox API access
+
+# Proxmox API configuration
+proxmox_host: "192.168.2.100"
+proxmox_user: "root@pam"
+proxmox_node: "proxmox"
+
+# Certificate validation settings
+# In production, you should use proper certificates instead of disabling validation
+# For self-signed certificates in homelab environment, we disable validation
+# but flag it explicitly for security awareness
+proxmox_validate_certs: false
+
+# Security note: This is set to false for homelab with self-signed certificates.
+# In production environments, use:
+# 1. Proper CA-signed certificates on Proxmox
+# 2. Set proxmox_validate_certs: true
+# 3. Or provide custom CA certificate path
