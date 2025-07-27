@@ -1,0 +1,107 @@
+# Homelab Configuration Template
+# Copy this file to homelab-config.yml and customize for your environment
+# homelab-config.yml is gitignored to keep your specific details private
+
+homelab:
+  # Basic information about your homelab
+  name: "My Homelab"
+  description: "Personal homelab infrastructure"
+  
+  # Proxmox configuration
+  proxmox:
+    host: "192.168.1.100"          # Your Proxmox server IP
+    node: "proxmox"                # Your Proxmox node name
+    user: "root@pam"               # Proxmox user (typically root@pam)
+    keychain_service: "homelab-proxmox"  # macOS keychain service name
+    keychain_account: "proxmox"    # macOS keychain account name
+  
+  # Network configuration
+  network:
+    subnet: "192.168.1.0/24"       # Your homelab network subnet
+    gateway: "192.168.1.1"         # Your network gateway
+  
+  # Infrastructure layout
+  infrastructure:
+    # Virtual Machines
+    vms:
+      - vmid: 100
+        name: "example-vm"
+        description: "Example virtual machine"
+        role: "general"
+        ip: "192.168.1.100"
+        specs:
+          cpu: 2
+          memory: "4GB"
+          storage: "50GB"
+      
+      - vmid: 101
+        name: "k3s-master"
+        description: "Kubernetes master node"
+        role: "k3s-master"
+        ip: "192.168.1.101"
+        specs:
+          cpu: 2
+          memory: "4GB"
+          storage: "100GB"
+      
+      - vmid: 102
+        name: "k3s-worker1"
+        description: "Kubernetes worker node 1"
+        role: "k3s-worker"
+        ip: "192.168.1.102"
+        specs:
+          cpu: 2
+          memory: "4GB"
+          storage: "100GB"
+    
+    # Containers (LXC)
+    containers:
+      - vmid: 200
+        name: "example-container"
+        description: "Example LXC container"
+        role: "development"
+        ip: "192.168.1.200"
+        specs:
+          cpu: 4
+          memory: "8GB"
+          storage: "50GB"
+  
+  # K3s cluster configuration (if applicable)
+  k3s:
+    enabled: true
+    master_ip: "192.168.1.101"
+    workers:
+      - "192.168.1.102"
+      - "192.168.1.103"  # Add more workers as needed
+    
+    # Services deployed in your cluster
+    services:
+      - name: "example-app"
+        namespace: "default"
+        description: "Example application"
+      - name: "monitoring"
+        namespace: "monitoring"
+        description: "Prometheus/Grafana stack"
+  
+  # Hardware specifications (optional, for documentation)
+  hardware:
+    cpu: "AMD Ryzen 9 3950X"       # Your CPU
+    memory: "64GB"                 # Total system memory
+    storage: "2TB NVMe SSD"        # Storage description
+    gpu: "RTX 2080"                # GPU if applicable
+  
+  # Monitoring and alerting preferences
+  monitoring:
+    enabled: true
+    health_check_interval: "5m"
+    resource_thresholds:
+      cpu_warning: 80              # CPU usage warning threshold (%)
+      memory_warning: 85           # Memory usage warning threshold (%)
+      disk_warning: 90             # Disk usage warning threshold (%)
+  
+  # Backup configuration
+  backup:
+    enabled: true
+    schedule: "daily"
+    retention: "30 days"
+    location: "local-storage"

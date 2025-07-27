@@ -8,17 +8,16 @@ This is a homelab infrastructure-as-code project designed to manage a Proxmox ho
 
 ## Infrastructure Layout
 
-**Proxmox Host:** 192.168.2.100 (AMD Ryzen 9 3950X, 64GB RAM, RTX 2080)
+The system works with any Proxmox homelab configuration. Your specific infrastructure details should be configured in `homelab-config.yml` (see `homelab-config.yml.example` for template).
 
-**Existing VMs:**
-- VM 101: W11-VM (Windows 11, 6 CPU, 16GB RAM, 250GB)
-- VM 102: linux-devbox (Container, 4 CPU, 8GB RAM, 98GB)  
-- VM 103: k3s-master (2 CPU, 4GB RAM, 100GB) - 192.168.2.103
-- VM 104: k3s-worker1 (2 CPU, 4GB RAM, 100GB) - 192.168.2.104
-- VM 105: k3s-worker2 (2 CPU, 4GB RAM, 100GB) - 192.168.2.105
-- VM 100: ai-dev (Container, stopped, 8 CPU, 32GB RAM, 64GB)
+**Example Infrastructure:**
+- **Proxmox Host:** YOUR_PROXMOX_IP (configure in homelab-config.yml)
+- **VMs:** Any number of virtual machines with custom VM IDs
+- **Containers:** Any number of LXC containers with custom VM IDs
+- **K3s Cluster:** Optional Kubernetes cluster with configurable nodes
+- **Services:** Customizable service deployments based on your needs
 
-**K3s Services:** Gitea, PostgreSQL, Monitoring stack, ArgoCD (all deployed)
+**Configuration File:** `homelab-config.yml` (gitignored, contains your specific details)
 
 ## Unified Management Commands
 
@@ -38,30 +37,30 @@ This is a homelab infrastructure-as-code project designed to manage a Proxmox ho
 
 ### VM Operations
 ```bash
-# Start VM (qemu type)
-./homelab-unified.sh start 103 qemu    # Start k3s-master
-./homelab-unified.sh start 101 qemu    # Start W11-VM
+# Start VM (qemu type) - use your actual VM IDs
+./homelab-unified.sh start 101 qemu    # Start VM 101
+./homelab-unified.sh start 102 qemu    # Start VM 102
 
 # Stop VM
-./homelab-unified.sh stop 101 qemu     # Stop W11-VM
-./homelab-unified.sh stop 104 qemu     # Stop k3s-worker1
+./homelab-unified.sh stop 101 qemu     # Stop VM 101
+./homelab-unified.sh stop 102 qemu     # Stop VM 102
 
 # Restart VM
-./homelab-unified.sh restart 103 qemu  # Restart k3s-master
+./homelab-unified.sh restart 101 qemu  # Restart VM 101
 ```
 
 ### Container Operations
 ```bash
-# Start container (lxc type)
-./homelab-unified.sh start 100 lxc     # Start ai-dev container
-./homelab-unified.sh start 102 lxc     # Start linux-devbox
+# Start container (lxc type) - use your actual container IDs
+./homelab-unified.sh start 200 lxc     # Start container 200
+./homelab-unified.sh start 201 lxc     # Start container 201
 
 # Stop container
-./homelab-unified.sh stop 102 lxc      # Stop linux-devbox
-./homelab-unified.sh stop 100 lxc      # Stop ai-dev
+./homelab-unified.sh stop 200 lxc      # Stop container 200
+./homelab-unified.sh stop 201 lxc      # Stop container 201
 
 # Restart container
-./homelab-unified.sh restart 100 lxc   # Restart ai-dev
+./homelab-unified.sh restart 200 lxc   # Restart container 200
 ```
 
 ### K3s Cluster Management
@@ -180,8 +179,8 @@ ansible-playbook ansible/playbooks/vm-operations.yml -e "proxmox_password=PASSWO
 ### Debug Commands
 
 ```bash
-# Test Proxmox connectivity
-curl -k https://192.168.2.100:8006/api2/json/version
+# Test Proxmox connectivity (replace with your IP)
+curl -k https://YOUR_PROXMOX_IP:8006/api2/json/version
 
 # Check keychain credentials
 security find-generic-password -a "proxmox" -s "homelab-proxmox"
@@ -189,14 +188,14 @@ security find-generic-password -a "proxmox" -s "homelab-proxmox"
 # Run Ansible with verbose output
 ansible-playbook ansible/playbooks/unified-infrastructure.yml -v -e "proxmox_password=PASSWORD"
 
-# Test specific VM operation
+# Test specific VM operation (use your VM IDs)
 ./homelab-unified.sh status
-./homelab-unified.sh start 103 qemu
+./homelab-unified.sh start 101 qemu
 
 # Check infrastructure state file
 cat infrastructure-state.yml
 
-# Verify K3s cluster
+# Verify K3s cluster (if configured)
 kubectl cluster-info
 kubectl get nodes
 ```
@@ -205,9 +204,10 @@ kubectl get nodes
 
 If you receive "No route to host" errors, this typically indicates network configuration issues:
 
-1. Verify Proxmox host is accessible: `ping 192.168.2.100`
+1. Verify Proxmox host is accessible: `ping YOUR_PROXMOX_IP`
 2. Check firewall settings on Proxmox host
 3. Ensure you're on the same network as the Proxmox server
 4. Test API access directly with curl before running Ansible
+5. Verify `homelab-config.yml` has correct IP addresses
 
 This project prioritizes safety and non-disruptive operations. Always verify infrastructure state before making modifications.

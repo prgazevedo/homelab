@@ -1,24 +1,18 @@
 # Homelab Infrastructure Management
 
-Infrastructure-as-Code project for managing a Proxmox homelab with K3s cluster through discovery, import, and synchronization workflows.
+Infrastructure-as-Code project for managing any Proxmox homelab with optional K3s cluster through unified discovery, import, sync, monitor, and maintain (DISMM) workflows.
 
-## Current Infrastructure
+## What This Project Does
 
-**Proxmox Host:** 192.168.2.100 (AMD Ryzen 9 3950X, 64GB RAM, RTX 2080)
+This project provides a **unified command-line interface** for managing Proxmox-based homelabs through Ansible automation. It discovers your existing infrastructure without disruption and provides operational management for VMs, containers, and Kubernetes clusters.
 
-**VMs:**
-- VM 101: W11-VM (Windows 11, 6 CPU, 16GB RAM, 250GB)
-- VM 102: linux-devbox (Container, 4 CPU, 8GB RAM, 98GB)
-- VM 103: k3s-master (2 CPU, 4GB RAM, 100GB) - 192.168.2.103
-- VM 104: k3s-worker1 (2 CPU, 4GB RAM, 100GB) - 192.168.2.104
-- VM 105: k3s-worker2 (2 CPU, 4GB RAM, 100GB) - 192.168.2.105
-- VM 100: ai-dev (Container, stopped, 8 CPU, 32GB RAM, 64GB)
-
-**K3s Cluster Services:**
-- Gitea (ready to deploy)
-- PostgreSQL (deployed)
-- Monitoring stack (deployed)
-- ArgoCD (deployed)
+### Key Capabilities
+- **🔍 Discovery**: Real-time infrastructure scanning via Proxmox API
+- **📊 Monitoring**: Resource usage tracking and health checks
+- **🚀 Operations**: VM/container lifecycle management (start/stop/restart)
+- **☸️ K3s Support**: Kubernetes cluster health monitoring and management
+- **🔒 Security**: Secure credential management via macOS keychain
+- **📋 State Management**: Infrastructure state exported to version-controlled files
 
 ## Project Structure
 
@@ -36,26 +30,43 @@ homelab-infra/
 └── docs/                    # Documentation
 ```
 
-## Prerequisites
+## Quick Start
 
-1. **Proxmox API Access**: Store credentials securely in macOS keychain:
-   ```bash
-   security add-generic-password -a "proxmox" -s "homelab-proxmox" -D "Proxmox API (root@192.168.2.100:8006)" -w
-   ```
-   When prompted, enter your Proxmox root password.
+### 1. Configure Your Homelab
 
-2. **Dependencies**: Python 3.11+, Ansible
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+Copy the configuration template and customize for your environment:
+```bash
+cp homelab-config.yml.example homelab-config.yml
+# Edit homelab-config.yml with your specific Proxmox details
+```
 
-3. **Network Access**: Ensure your machine can reach the Proxmox host:
-   ```bash
-   ping 192.168.2.100
-   curl -k https://192.168.2.100:8006/api2/json/version
-   ```
+### 2. Setup Prerequisites
+
+**Proxmox API Access**: Store credentials securely in macOS keychain:
+```bash
+security add-generic-password -a "proxmox" -s "homelab-proxmox" -D "Proxmox API" -w
+```
+When prompted, enter your Proxmox root password.
+
+**Dependencies**: Install Python and Ansible:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+**Network Access**: Test connectivity to your Proxmox host:
+```bash
+ping YOUR_PROXMOX_IP
+curl -k https://YOUR_PROXMOX_IP:8006/api2/json/version
+```
+
+### 3. Discover Your Infrastructure
+
+Run your first discovery:
+```bash
+./homelab-unified.sh status
+```
 
 ## Unified Management
 
@@ -80,16 +91,16 @@ homelab-infra/
 
 ### 🖥️ **VM Management**
 ```bash
-./homelab-unified.sh start 103 qemu    # Start k3s-master
-./homelab-unified.sh stop 101 qemu     # Stop W11-VM
-./homelab-unified.sh restart 104 qemu  # Restart k3s-worker1
+./homelab-unified.sh start 101 qemu    # Start VM 101
+./homelab-unified.sh stop 102 qemu     # Stop VM 102
+./homelab-unified.sh restart 103 qemu  # Restart VM 103
 ```
 
 ### 📦 **Container Management**
 ```bash
-./homelab-unified.sh start 100 lxc     # Start ai-dev container
-./homelab-unified.sh stop 102 lxc      # Stop linux-devbox
-./homelab-unified.sh restart 100 lxc   # Restart ai-dev
+./homelab-unified.sh start 200 lxc     # Start container 200
+./homelab-unified.sh stop 201 lxc      # Stop container 201
+./homelab-unified.sh restart 200 lxc   # Restart container 200
 ```
 
 ### ☸️ **K3s Cluster**
@@ -111,16 +122,21 @@ homelab-infra/
 ### Common Issues
 
 **Connection Problems:**
-- Ensure network connectivity: `ping 192.168.2.100`
-- Test API access: `curl -k https://192.168.2.100:8006/api2/json/version`
+- Ensure network connectivity: `ping YOUR_PROXMOX_IP`
+- Test API access: `curl -k https://YOUR_PROXMOX_IP:8006/api2/json/version`
 - Verify keychain credentials: `security find-generic-password -a "proxmox" -s "homelab-proxmox"`
+
+**Configuration Issues:**
+- Verify `homelab-config.yml` has correct Proxmox host IP and credentials
+- Check Ansible configuration in `ansible/group_vars/all.yml`
+- Ensure VM IDs in commands match your actual infrastructure
 
 **VM Operations:**
 - Check VM exists and is accessible via Proxmox web interface
 - Verify VM ID and type (qemu for VMs, lxc for containers)
 - Monitor Ansible logs for detailed error information
 
-**K3s Cluster:**
+**K3s Cluster (if enabled):**
 - Ensure k3s-management.sh script exists and is executable
 - Check cluster connectivity: `kubectl cluster-info`
 - Verify worker nodes are reachable: `kubectl get nodes`

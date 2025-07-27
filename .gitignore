@@ -16,6 +16,9 @@ secrets/
 .env
 .env.local
 
+# Local homelab configuration (contains specific details)
+homelab-config.yml
+
 # Infrastructure state (generated files)
 infrastructure-state.yml
 infrastructure-state.json
