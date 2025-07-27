@@ -25,27 +25,36 @@ Infrastructure-as-Code project for managing a Proxmox homelab with K3s cluster t
 ```
 homelab-infra/
 ├── homelab-unified.sh       # Single command for all operations
+├── k3s-management.sh        # K3s cluster management and health checks
 ├── ansible/                 # Unified infrastructure management
 │   ├── inventory.yml        # Infrastructure inventory
+│   ├── group_vars/          # Global configuration
 │   └── playbooks/           # Automation playbooks
-├── discovery/              # Infrastructure discovery tools
-├── monitoring/            # Observability stack (Grafana/Prometheus)
-├── tools/                # Health checks and utilities
-└── docs/                 # Documentation
+├── monitoring/              # Observability stack (Grafana/Prometheus)
+├── tools/                   # Health checks and utilities
+├── archive/                 # Legacy tools (Terraform, old scripts)
+└── docs/                    # Documentation
 ```
 
 ## Prerequisites
 
-1. **Proxmox API Access**: Store credentials in macOS keychain:
+1. **Proxmox API Access**: Store credentials securely in macOS keychain:
    ```bash
    security add-generic-password -a "proxmox" -s "homelab-proxmox" -D "Proxmox API (root@192.168.2.100:8006)" -w
    ```
+   When prompted, enter your Proxmox root password.
 
 2. **Dependencies**: Python 3.11+, Ansible
    ```bash
    python3 -m venv venv
    source venv/bin/activate
    pip install -r requirements.txt
+   ```
+
+3. **Network Access**: Ensure your machine can reach the Proxmox host:
+   ```bash
+   ping 192.168.2.100
+   curl -k https://192.168.2.100:8006/api2/json/version
    ```
 
 ## Unified Management
@@ -85,8 +94,40 @@ homelab-infra/
 
 ### ☸️ **K3s Cluster**
 ```bash
-./homelab-unified.sh k3s         # K3s cluster management
+./homelab-unified.sh k3s         # K3s cluster management and health checks
 ```
+
+## Key Features
+
+- **Unified Interface**: Single command for all infrastructure operations
+- **Non-Disruptive**: Imports and syncs existing infrastructure without changes
+- **Real-Time Discovery**: Live infrastructure state via Proxmox API
+- **Secure Credentials**: macOS keychain integration for API authentication
+- **Comprehensive Monitoring**: Resource usage, health checks, and alerting
+- **State Management**: Infrastructure state exported to versioned YAML files
+
+## Troubleshooting
+
+### Common Issues
+
+**Connection Problems:**
+- Ensure network connectivity: `ping 192.168.2.100`
+- Test API access: `curl -k https://192.168.2.100:8006/api2/json/version`
+- Verify keychain credentials: `security find-generic-password -a "proxmox" -s "homelab-proxmox"`
+
+**VM Operations:**
+- Check VM exists and is accessible via Proxmox web interface
+- Verify VM ID and type (qemu for VMs, lxc for containers)
+- Monitor Ansible logs for detailed error information
+
+**K3s Cluster:**
+- Ensure k3s-management.sh script exists and is executable
+- Check cluster connectivity: `kubectl cluster-info`
+- Verify worker nodes are reachable: `kubectl get nodes`
+
+### Getting Help
+
+Run `./homelab-unified.sh help` for complete command reference and examples.
 
 ## Philosophy
 

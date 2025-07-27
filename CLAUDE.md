@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a homelab infrastructure-as-code project designed to manage a Proxmox homelab with K3s cluster through **discovery, import, and synchronization** workflows. The key principle is to import and sync existing infrastructure rather than recreate it.
+This is a homelab infrastructure-as-code project designed to manage a Proxmox homelab with K3s cluster through **unified Ansible-based automation**. The system provides complete DISMM (Discover, Import, Sync, Monitor, Maintain) workflow through a single command interface. The key principle is to import and sync existing infrastructure rather than recreate it.
 
 ## Infrastructure Layout
 
@@ -20,170 +20,194 @@ This is a homelab infrastructure-as-code project designed to manage a Proxmox ho
 
 **K3s Services:** Gitea, PostgreSQL, Monitoring stack, ArgoCD (all deployed)
 
-## Common Commands
+## Unified Management Commands
 
-### Discovery and Initial Setup
+### Single Entry Point
 ```bash
-# Discover current infrastructure
-make discover
+# Complete infrastructure overview (default action)
+./homelab-unified.sh
+./homelab-unified.sh status
+./homelab-unified.sh discover
 
-# Quick start workflow (discover -> import -> sync)
-make quickstart
+# Update infrastructure state file
+./homelab-unified.sh sync
 
-# Discover only Proxmox
-make discover-proxmox
-
-# Discover only K3s cluster
-make discover-k3s
+# Show all available commands
+./homelab-unified.sh help
 ```
 
-### Terraform Operations
+### VM Operations
 ```bash
-# Initialize Terraform
-make terraform-init
+# Start VM (qemu type)
+./homelab-unified.sh start 103 qemu    # Start k3s-master
+./homelab-unified.sh start 101 qemu    # Start W11-VM
 
-# Import existing VMs into Terraform state
-make import
+# Stop VM
+./homelab-unified.sh stop 101 qemu     # Stop W11-VM
+./homelab-unified.sh stop 104 qemu     # Stop k3s-worker1
 
-# Sync current state with IaC
-make sync
-
-# Plan changes
-make terraform-plan
-
-# Apply changes (use carefully!)
-make terraform-apply
-
-# Show current state
-make terraform-show
+# Restart VM
+./homelab-unified.sh restart 103 qemu  # Restart k3s-master
 ```
 
-### Health and Monitoring
+### Container Operations
 ```bash
-# Run health checks
-make health
+# Start container (lxc type)
+./homelab-unified.sh start 100 lxc     # Start ai-dev container
+./homelab-unified.sh start 102 lxc     # Start linux-devbox
 
-# Get health status as JSON
-make health-json
+# Stop container
+./homelab-unified.sh stop 102 lxc      # Stop linux-devbox
+./homelab-unified.sh stop 100 lxc      # Stop ai-dev
 
-# Export K8s manifests
-make export-k8s
-
-# Create backup
-make backup
+# Restart container
+./homelab-unified.sh restart 100 lxc   # Restart ai-dev
 ```
 
-### Validation and Testing
+### K3s Cluster Management
 ```bash
-# Validate Terraform configs
-make validate
+# K3s cluster overview and management
+./homelab-unified.sh k3s
+```
 
-# Run all tests (health + validation)
-make test
+### Direct Ansible Execution
+```bash
+# Run specific playbooks directly
+ansible-playbook ansible/playbooks/unified-infrastructure.yml -e "proxmox_password=PASSWORD"
+ansible-playbook ansible/playbooks/vm-operations.yml -e "proxmox_password=PASSWORD" -e "action=start" -e "vmid=103" -e "vm_type=qemu"
 ```
 
 ## Project Architecture
 
 ### Directory Structure
-- **discovery/**: Infrastructure discovery tools (proxmox-scanner.py, k3s-scanner.py)
-- **sync/**: Synchronization tools (terraform-import/, k8s-export/)
-- **terraform/**: Infrastructure management (imported/, new/, modules/)
-- **monitoring/**: Observability (prometheus-rules/, grafana-dashboards/)
+- **ansible/**: Unified infrastructure automation and configuration
+  - **playbooks/**: Ansible automation playbooks
+  - **group_vars/**: Global configuration variables
+  - **inventory.yml**: Infrastructure inventory definitions
+- **homelab-unified.sh**: Single command interface for all operations
+- **monitoring/**: Observability stack (prometheus-rules/, grafana-dashboards/)
 - **tools/**: Management utilities (health-check/, backup-scripts/)
+- **archive/**: Deprecated Terraform attempts (preserved for reference)
 
-### Key Scripts
-- `discovery/proxmox-scanner.py`: Scans Proxmox API for VM/container inventory
-- `discovery/k3s-scanner.py`: Discovers K3s cluster state and resources
-- `sync/terraform-import/import-existing.sh`: Imports existing VMs into Terraform
-- `sync/terraform-import/generate-configs.py`: Generates TF configs from discovery data
-- `tools/health-check/health-check.py`: Comprehensive health monitoring
+### Core Components
+- `homelab-unified.sh`: Main entry point providing unified DISMM interface
+- `ansible/playbooks/unified-infrastructure.yml`: Complete infrastructure discovery and monitoring
+- `ansible/playbooks/vm-operations.yml`: VM/container lifecycle management (start/stop/restart)
+- `ansible/group_vars/all.yml`: Global configuration including security settings
+- `ansible.cfg`: Ansible configuration optimized for homelab environment
 
-### Terraform Configuration
-- **Provider:** telmate/proxmox ~> 2.9
-- **Backend:** Local state (consider remote for production)
-- **Variables:** Defined in variables.tf, use terraform.tfvars for values
-- **Imported Resources:** All existing VMs have `prevent_destroy = true`
+### Ansible Configuration
+- **API Integration:** Direct Proxmox API calls via uri module
+- **Authentication:** Secure keychain-based credential management
+- **Security:** Proper certificate validation with justified exceptions for self-signed certificates
+- **State Management:** Infrastructure state exported to YAML files
+- **Error Handling:** Comprehensive validation and timeout management
 
 ## Workflow Patterns
 
-### Import Existing Infrastructure
-1. Run discovery to scan current state
-2. Import VMs into Terraform state
-3. Generate matching Terraform configs
-4. Validate no drift exists
+### DISMM Workflow (Discover, Import, Sync, Monitor, Maintain)
+1. **Discover**: Real-time infrastructure scanning via Proxmox API
+2. **Import**: Capture current state without disrupting running services
+3. **Sync**: Export infrastructure state to versioned YAML files
+4. **Monitor**: Continuous health monitoring and resource usage tracking
+5. **Maintain**: Automated alerts for stopped services and high resource usage
 
-### Adding New Infrastructure
-1. Create configs in terraform/new/
-2. Plan and apply changes
-3. Update documentation
+### Daily Operations
+1. Run `./homelab-unified.sh status` for infrastructure overview
+2. Use VM/container operations for lifecycle management
+3. Monitor exported state files for configuration changes
+4. Check K3s cluster health via `./homelab-unified.sh k3s`
 
-### Monitoring and Maintenance
-1. Regular health checks via make health
-2. Backup current state via make backup
-3. Monitor for configuration drift
+### Infrastructure Changes
+1. Use Ansible playbooks for configuration changes
+2. Test changes against non-production VMs first
+3. Update documentation after successful changes
+4. Monitor infrastructure state post-change
 
 ## Safety Guidelines
 
 ### Critical Safety Rules
-- **NEVER** run `terraform destroy` - all resources have `prevent_destroy = true`
-- **ALWAYS** run `terraform plan` before `terraform apply`
-- **VERIFY** health checks pass before making changes
-- **BACKUP** state before major changes
+- **ALWAYS** test VM operations on non-critical VMs first
+- **VERIFY** infrastructure state before making changes via `./homelab-unified.sh status`
+- **BACKUP** current state files before major changes
+- **MONITOR** infrastructure after operations for unexpected behavior
 
 ### Credential Management
-- Proxmox credentials go in `terraform/terraform.tfvars` (gitignored)
-- Never commit passwords or API tokens
-- Use environment variables for CI/CD
+- Proxmox credentials stored securely in macOS keychain
+- Never commit passwords or API tokens to version control
+- Use `security add-generic-password` for credential storage
+- Ansible playbooks retrieve credentials dynamically from keychain
 
 ### Change Management
-- Test changes in development first
-- Use `make validate` before applying
-- Monitor infrastructure after changes
-- Keep rollback plans ready
+- Test Ansible playbooks on single VMs before mass operations
+- Review infrastructure-state.yml for configuration drift
+- Monitor resource usage after VM operations
+- Keep K3s cluster health in mind when managing worker nodes
 
 ## Development Guidelines
 
-### Adding New Discovery Scripts
-- Follow the pattern in existing scanners
-- Output JSON for programmatic processing
-- Include summary and detailed modes
-- Handle errors gracefully
+### Extending Ansible Playbooks
+- Follow existing patterns in ansible/playbooks/
+- Use proper error handling with register and failed_when
+- Include no_log: true for sensitive operations
+- Test playbooks with --check mode first
+- Document security exceptions with checkov:skip comments
 
-### Extending Terraform Modules
-- Create reusable modules in terraform/modules/
-- Follow naming conventions: resource_type_purpose
-- Include validation and documentation
-- Test with plan before apply
+### Adding New VM Operations
+- Extend ansible/playbooks/vm-operations.yml
+- Follow Proxmox API patterns for authentication
+- Include proper task status monitoring
+- Handle both qemu (VMs) and lxc (containers) types
+- Test operations on non-critical VMs first
 
-### Adding Health Checks
-- Extend tools/health-check/health-check.py
-- Include timeout and error handling
-- Provide both human and JSON output
-- Test edge cases and failures
+### Modifying Infrastructure Discovery
+- Extend ansible/playbooks/unified-infrastructure.yml
+- Use uri module for Proxmox API integration
+- Include proper error handling and timeouts
+- Update state file generation for new data points
+- Test discovery against different infrastructure states
 
 ## Troubleshooting
 
 ### Common Issues
-- **Terraform import fails:** Check VM exists and credentials are correct
-- **Health check timeouts:** Verify network connectivity and service status  
-- **Discovery script errors:** Ensure API access and proper credentials
-- **Plan shows drift:** Review generated configs vs actual state
+
+- **Ansible playbook fails:** Check Proxmox API connectivity and credentials in keychain
+- **VM operations timeout:** Verify VM exists and Proxmox service is running
+- **Authentication errors:** Ensure keychain contains valid Proxmox credentials
+- **Certificate validation errors:** Review proxmox_validate_certs setting in group_vars/all.yml
+- **K3s management fails:** Check k3s-management.sh script exists and is executable
 
 ### Debug Commands
+
 ```bash
-# Check Terraform state
-terraform state list
-terraform show <resource>
+# Test Proxmox connectivity
+curl -k https://192.168.2.100:8006/api2/json/version
 
-# Test connectivity
-ping 192.168.2.100
+# Check keychain credentials
+security find-generic-password -a "proxmox" -s "homelab-proxmox"
+
+# Run Ansible with verbose output
+ansible-playbook ansible/playbooks/unified-infrastructure.yml -v -e "proxmox_password=PASSWORD"
+
+# Test specific VM operation
+./homelab-unified.sh status
+./homelab-unified.sh start 103 qemu
+
+# Check infrastructure state file
+cat infrastructure-state.yml
+
+# Verify K3s cluster
 kubectl cluster-info
-
-# Verbose health check
-python3 tools/health-check/health-check.py --config health-config.json
-
-# Discovery with debug
-python3 discovery/proxmox-scanner.py --host 192.168.2.100 --format summary
+kubectl get nodes
 ```
 
-This project prioritizes safety and incremental changes over speed. Always verify current state before making modifications.
+### Network Connectivity Issues
+
+If you receive "No route to host" errors, this typically indicates network configuration issues:
+
+1. Verify Proxmox host is accessible: `ping 192.168.2.100`
+2. Check firewall settings on Proxmox host
+3. Ensure you're on the same network as the Proxmox server
+4. Test API access directly with curl before running Ansible
+
+This project prioritizes safety and non-disruptive operations. Always verify infrastructure state before making modifications.

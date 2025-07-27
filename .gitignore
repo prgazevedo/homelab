@@ -21,6 +21,10 @@ infrastructure-state.yml
 infrastructure-state.json
 k3s-exported/
 
+# Ansible logs and temporary files
+ansible.log
+*.retry
+
 # IDE
 .vscode/settings.json
 .idea/
@@ -51,6 +55,11 @@ archive/
 # .claude/commands/         # Team slash commands (official Claude Code)
 # .claude/.plans/           # Project documentation (extension-specific)
 
-# Archived sensitive files
+# Archived sensitive files (Terraform legacy)
 archive/**/*.tfstate*
 archive/**/*.tfvars
+
+# Debug and development files
+debug-*.sh
+test-*.sh
+temp-*
