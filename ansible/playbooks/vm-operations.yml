@@ -1,0 +1,64 @@
+---
+# VM and Container Operations via Proxmox API
+# Provides start, stop, restart functionality for all VMs and containers
+
+- name: VM/Container Operations
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: "192.168.2.100"
+    proxmox_user: "root@pam"
+    proxmox_node: "proxmox"
+    # action: start, stop, restart
+    # vmid: VM/Container ID
+    # vm_type: qemu (VM) or lxc (container)
+    
+  tasks:
+    - name: Authenticate with Proxmox
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/access/ticket"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          username: "{{ proxmox_user }}"
+          password: "{{ proxmox_password }}"
+        validate_certs: false
+      register: auth_result
+      no_log: true
+      
+    - name: Set authentication variables
+      set_fact:
+        proxmox_ticket: "{{ auth_result.json.data.ticket }}"
+        csrf_token: "{{ auth_result.json.data.CSRFPreventionToken }}"
+      no_log: true
+
+    - name: "{{ action | upper }}: VM/Container {{ vmid }}"
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/{{ vm_type }}/{{ vmid }}/status/{{ action }}"
+        method: POST
+        headers:
+          Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
+          CSRFPreventionToken: "{{ csrf_token }}"
+        validate_certs: false
+      register: operation_result
+      
+    - name: Display operation result
+      debug:
+        msg: "✅ {{ action | title }} operation completed for {{ vm_type | upper }} {{ vmid }}. Task ID: {{ operation_result.json.data }}"
+
+    - name: Wait for operation to complete
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/tasks/{{ operation_result.json.data }}/status"
+        method: GET
+        headers:
+          Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
+          CSRFPreventionToken: "{{ csrf_token }}"
+        validate_certs: false
+      register: task_status
+      until: task_status.json.data.status != "running"
+      retries: 30
+      delay: 2
+      
+    - name: Display final status
+      debug:
+        msg: "🎉 Operation {{ action }} for {{ vm_type | upper }} {{ vmid }} completed with status: {{ task_status.json.data.status }}"

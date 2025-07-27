@@ -1,0 +1,158 @@
+---
+# Unified Infrastructure Management via Proxmox API
+# Replaces Terraform, Python discovery scripts, and provides complete DISMM workflow
+
+- name: Homelab Infrastructure Management
+  hosts: localhost
+  gather_facts: true
+  vars:
+    proxmox_host: "192.168.2.100"
+    proxmox_user: "root@pam"
+    proxmox_node: "proxmox"
+    
+  tasks:
+    - name: "DISCOVER: Get Proxmox authentication ticket"
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/access/ticket"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          username: "{{ proxmox_user }}"
+          password: "{{ proxmox_password }}"
+        validate_certs: false
+      register: auth_result
+      no_log: true
+      
+    - name: Set authentication variables
+      set_fact:
+        proxmox_ticket: "{{ auth_result.json.data.ticket }}"
+        csrf_token: "{{ auth_result.json.data.CSRFPreventionToken }}"
+      no_log: true
+
+    - name: "DISCOVER: Get all VMs"
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/qemu"
+        method: GET
+        headers:
+          Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
+          CSRFPreventionToken: "{{ csrf_token }}"
+        validate_certs: false
+      register: vm_list
+      
+    - name: "DISCOVER: Get all containers"
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/lxc"
+        method: GET
+        headers:
+          Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
+          CSRFPreventionToken: "{{ csrf_token }}"
+        validate_certs: false
+      register: container_list
+
+    - name: "DISCOVER: Get storage information"
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/storage"
+        method: GET
+        headers:
+          Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
+          CSRFPreventionToken: "{{ csrf_token }}"
+        validate_certs: false
+      register: storage_info
+
+    - name: "DISCOVER: Get node information"
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/status"
+        method: GET
+        headers:
+          Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
+          CSRFPreventionToken: "{{ csrf_token }}"
+        validate_certs: false
+      register: node_status
+
+    - name: "DISPLAY: Infrastructure Summary"
+      debug:
+        msg: |
+          🏠 HOMELAB INFRASTRUCTURE SUMMARY
+          ================================
+          
+          📊 Node Status:
+          • CPU Usage: {{ (node_status.json.data.cpu * 100) | round(1) }}%
+          • Memory: {{ (node_status.json.data.memory.used / 1024 / 1024 / 1024) | round(1) }}GB / {{ (node_status.json.data.memory.total / 1024 / 1024 / 1024) | round(1) }}GB
+          • Load Average: {{ node_status.json.data.loadavg[0] }}
+          • Uptime: {{ (node_status.json.data.uptime / 86400) | round(1) }} days
+          
+          🖥️  Virtual Machines ({{ vm_list.json.data | length }}):
+          {% for vm in vm_list.json.data %}
+          • VM {{ vm.vmid }}: {{ vm.name }} - {{ vm.status }} ({{ vm.cpus }} CPU, {{ (vm.maxmem / 1024 / 1024) | round(0) }}MB RAM)
+          {% endfor %}
+          
+          📦 Containers ({{ container_list.json.data | length }}):
+          {% for ct in container_list.json.data %}
+          • CT {{ ct.vmid }}: {{ ct.name }} - {{ ct.status }} ({{ ct.cpus }} CPU, {{ (ct.maxmem / 1024 / 1024) | round(0) }}MB RAM)
+          {% endfor %}
+          
+          💾 Storage Pools ({{ storage_info.json.data | length }}):
+          {% for storage in storage_info.json.data %}
+          • {{ storage.storage }}: {{ storage.type }} - {{ storage.content | join(', ') }}
+          {% endfor %}
+
+    - name: "SYNC: Save infrastructure state to file"
+      copy:
+        content: |
+          # Homelab Infrastructure State
+          # Generated: {{ ansible_date_time.iso8601 }}
+          
+          infrastructure:
+            node:
+              name: {{ proxmox_node }}
+              host: {{ proxmox_host }}
+              cpu_usage: {{ (node_status.json.data.cpu * 100) | round(1) }}%
+              memory_used: {{ (node_status.json.data.memory.used / 1024 / 1024 / 1024) | round(1) }}GB
+              memory_total: {{ (node_status.json.data.memory.total / 1024 / 1024 / 1024) | round(1) }}GB
+              uptime_days: {{ (node_status.json.data.uptime / 86400) | round(1) }}
+              
+            vms:
+          {% for vm in vm_list.json.data %}
+              - vmid: {{ vm.vmid }}
+                name: "{{ vm.name }}"
+                status: "{{ vm.status }}"
+                cpus: {{ vm.cpus }}
+                memory_mb: {{ (vm.maxmem / 1024 / 1024) | round(0) }}
+                cpu_usage: {{ (vm.cpu * 100) | round(1) }}%
+                memory_used_mb: {{ (vm.mem / 1024 / 1024) | round(0) }}
+                uptime_hours: {{ (vm.uptime / 3600) | round(1) }}
+          {% endfor %}
+          
+            containers:
+          {% for ct in container_list.json.data %}
+              - vmid: {{ ct.vmid }}
+                name: "{{ ct.name }}"
+                status: "{{ ct.status }}"
+                cpus: {{ ct.cpus }}
+                memory_mb: {{ (ct.maxmem / 1024 / 1024) | round(0) }}
+                {% if ct.status == 'running' %}
+                cpu_usage: {{ (ct.cpu * 100) | round(1) }}%
+                memory_used_mb: {{ (ct.mem / 1024 / 1024) | round(0) }}
+                uptime_hours: {{ (ct.uptime / 3600) | round(1) }}
+                {% endif %}
+          {% endfor %}
+          
+            storage:
+          {% for storage in storage_info.json.data %}
+              - name: "{{ storage.storage }}"
+                type: "{{ storage.type }}"
+                content: {{ storage.content }}
+          {% endfor %}
+        dest: "./infrastructure-state.yml"
+        
+    - name: "MAINTAIN: Check for stopped containers that should be running"
+      debug:
+        msg: "⚠️  Container {{ item.name }} ({{ item.vmid }}) is stopped"
+      loop: "{{ container_list.json.data }}"
+      when: item.status == "stopped" and item.name != "ai-dev"  # ai-dev is intentionally stopped
+      
+    - name: "MAINTAIN: Check for high resource usage"
+      debug:
+        msg: "⚠️  VM {{ item.name }} ({{ item.vmid }}) high CPU usage: {{ (item.cpu * 100) | round(1) }}%"
+      loop: "{{ vm_list.json.data }}"
+      when: item.cpu > 0.8  # 80% CPU threshold

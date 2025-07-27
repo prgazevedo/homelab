@@ -1,0 +1,62 @@
+---
+# Ansible playbook for VM lifecycle management via Proxmox API
+# This handles what Terraform couldn't due to provider issues
+
+- name: Proxmox VM Management
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: "192.168.2.100"
+    proxmox_user: "root@pam"
+    # Password retrieved from keychain in wrapper script
+    
+  tasks:
+    - name: Get VM status
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/proxmox/qemu"
+        method: GET
+        headers:
+          Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
+          CSRFPreventionToken: "{{ csrf_token }}"
+        validate_certs: false
+      register: vm_status
+      
+    - name: Display VM information
+      debug:
+        msg: "VM {{ item.vmid }}: {{ item.name }} - {{ item.status }} ({{ item.cpus }} cores, {{ item.maxmem // 1024 // 1024 }}MB)"
+      loop: "{{ vm_status.json.data }}"
+      
+    - name: Get container status
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/proxmox/lxc"
+        method: GET
+        headers:
+          Authorization: "PVEAuthCookie={{ proxmox_ticket }}"
+          CSRFPreventionToken: "{{ csrf_token }}"
+        validate_certs: false
+      register: container_status
+      
+    - name: Display container information
+      debug:
+        msg: "CT {{ item.vmid }}: {{ item.name }} - {{ item.status }} ({{ item.cpus }} cores, {{ item.maxmem // 1024 // 1024 }}MB)"
+      loop: "{{ container_status.json.data }}"
+
+- name: K3s Cluster Health Check
+  hosts: k3s_cluster
+  gather_facts: true
+  tasks:
+    - name: Check K3s service status
+      systemd:
+        name: k3s
+      register: k3s_status
+      when: inventory_hostname in groups['k3s_masters']
+      
+    - name: Check K3s agent status
+      systemd:
+        name: k3s-agent
+      register: k3s_agent_status
+      when: inventory_hostname in groups['k3s_workers']
+      
+    - name: Display K3s status
+      debug:
+        msg: "{{ inventory_hostname }}: K3s {{ 'master' if inventory_hostname in groups['k3s_masters'] else 'worker' }} - {{ k3s_status.status.ActiveState if k3s_status is defined else k3s_agent_status.status.ActiveState }}"

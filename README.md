@@ -24,28 +24,68 @@ Infrastructure-as-Code project for managing a Proxmox homelab with K3s cluster t
 
 ```
 homelab-infra/
+├── homelab-unified.sh       # Single command for all operations
+├── ansible/                 # Unified infrastructure management
+│   ├── inventory.yml        # Infrastructure inventory
+│   └── playbooks/           # Automation playbooks
 ├── discovery/              # Infrastructure discovery tools
-├── sync/                   # Synchronization tooling
-├── terraform/             # Infrastructure management
-├── monitoring/            # Observability stack
-├── tools/                # Management utilities
+├── monitoring/            # Observability stack (Grafana/Prometheus)
+├── tools/                # Health checks and utilities
 └── docs/                 # Documentation
 ```
 
-## Quick Start
+## Prerequisites
+
+1. **Proxmox API Access**: Store credentials in macOS keychain:
+   ```bash
+   security add-generic-password -a "proxmox" -s "homelab-proxmox" -D "Proxmox API (root@192.168.2.100:8006)" -w
+   ```
+
+2. **Dependencies**: Python 3.11+, Ansible
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+## Unified Management
+
+**Single command for everything:**
 
 ```bash
-# Discover current infrastructure
-make discover
+# Complete infrastructure overview
+./homelab-unified.sh
 
-# Import existing resources into Terraform
-make import
+# See all available operations
+./homelab-unified.sh help
+```
 
-# Sync current state with IaC
-make sync
+## Operations
 
-# Deploy monitoring
-make monitor
+### 📊 **Discovery & Monitoring**
+```bash
+./homelab-unified.sh status      # Complete infrastructure overview
+./homelab-unified.sh discover    # Same as status
+./homelab-unified.sh sync        # Update infrastructure state file
+```
+
+### 🖥️ **VM Management**
+```bash
+./homelab-unified.sh start 103 qemu    # Start k3s-master
+./homelab-unified.sh stop 101 qemu     # Stop W11-VM
+./homelab-unified.sh restart 104 qemu  # Restart k3s-worker1
+```
+
+### 📦 **Container Management**
+```bash
+./homelab-unified.sh start 100 lxc     # Start ai-dev container
+./homelab-unified.sh stop 102 lxc      # Stop linux-devbox
+./homelab-unified.sh restart 100 lxc   # Restart ai-dev
+```
+
+### ☸️ **K3s Cluster**
+```bash
+./homelab-unified.sh k3s         # K3s cluster management
 ```
 
 ## Philosophy

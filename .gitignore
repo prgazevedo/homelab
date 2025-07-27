@@ -1,18 +1,10 @@
 
-# Terraform
-*.tfstate
-*.tfstate.*
-*.tfvars
-.terraform/
-.terraform.lock.hcl
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 venv/
 .venv/
 *.egg-info/
@@ -23,6 +15,11 @@ secrets/
 *.pem
 .env
 .env.local
+
+# Infrastructure state (generated files)
+infrastructure-state.yml
+infrastructure-state.json
+k3s-exported/
 
 # IDE
 .vscode/settings.json
@@ -40,6 +37,9 @@ Thumbs.db
 *.log
 logs/
 
+# Archive directory (old attempts)
+archive/
+
 # Claude Config Manager Extension - Security Rules
 # Prevents accidental commit of private conversation data
 .claude/.chats/
@@ -50,3 +50,7 @@ logs/
 # .claude/settings.json     # Team settings (official Claude Code)
 # .claude/commands/         # Team slash commands (official Claude Code)
 # .claude/.plans/           # Project documentation (extension-specific)
+
+# Archived sensitive files
+archive/**/*.tfstate*
+archive/**/*.tfvars

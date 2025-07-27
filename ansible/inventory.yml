@@ -1,0 +1,65 @@
+# Ansible inventory for homelab VMs and containers
+# Generated from Proxmox discovery
+
+all:
+  children:
+    proxmox:
+      hosts:
+        proxmox-host:
+          ansible_host: 192.168.2.100
+          ansible_user: root
+          
+    k3s_cluster:
+      children:
+        k3s_masters:
+          hosts:
+            k3s-master:
+              ansible_host: 192.168.2.103
+              ansible_user: ubuntu
+              vmid: 103
+              cores: 2
+              memory: 4096
+              
+        k3s_workers:
+          hosts:
+            k3s-worker1:
+              ansible_host: 192.168.2.104
+              ansible_user: ubuntu
+              vmid: 104
+              cores: 2
+              memory: 4096
+              
+            k3s-worker2:
+              ansible_host: 192.168.2.105
+              ansible_user: ubuntu
+              vmid: 105
+              cores: 2
+              memory: 4096
+              
+    containers:
+      hosts:
+        ai-dev:
+          ansible_host: 192.168.2.100  # LXC container on Proxmox
+          ansible_user: root
+          vmid: 100
+          cores: 8
+          memory: 32768
+          status: stopped
+          
+        linux-devbox:
+          ansible_host: 192.168.2.100  # LXC container on Proxmox
+          ansible_user: root
+          vmid: 102
+          cores: 4
+          memory: 8192
+          status: running
+          
+    windows:
+      hosts:
+        w11-vm:
+          ansible_host: 192.168.2.101  # Assuming IP
+          ansible_user: Administrator
+          ansible_connection: winrm
+          vmid: 101
+          cores: 6
+          memory: 16384
