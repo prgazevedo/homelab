@@ -88,7 +88,7 @@ case "$ACTION" in
         
     "k3s")
         echo "☸️  K3s Cluster Management..."
-        ./k3s-management.sh
+        ./scripts/k3s/k3s-unified.sh
         ;;
         
     "help")

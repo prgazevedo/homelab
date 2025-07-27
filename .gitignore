@@ -66,3 +66,13 @@ archive/**/*.tfvars
 debug-*.sh
 test-*.sh
 temp-*
+
+# K3s operation results (generated files)
+k3s-remote-results.yml
+*-discovery.json
+
+# Network configuration backups (contain specific IPs)
+network-configs-backup-*
+
+# VM discovery results (contain specific IPs and MACs)
+proxmox-vm-discovery.json

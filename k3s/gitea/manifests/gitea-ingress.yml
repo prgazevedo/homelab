@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitea-ingress
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/component: ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # For larger Git operations
+    nginx.ingress.kubernetes.io/proxy-body-size: "1g"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+spec:
+  ingressClassName: traefik  # K3s default ingress controller
+  rules:
+    - host: gitea.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gitea-http
+                port:
+                  number: 3000
+---
+# Alternative Traefik IngressRoute for K3s (comment out Ingress above if using this)
+# apiVersion: traefik.containo.us/v1alpha1
+# kind: IngressRoute
+# metadata:
+#   name: gitea-ingressroute
+#   namespace: gitea
+#   labels:
+#     app.kubernetes.io/name: gitea
+#     app.kubernetes.io/component: ingress
+# spec:
+#   entryPoints:
+#     - web
+#   routes:
+#     - match: Host(`gitea.local`)
+#       kind: Rule
+#       services:
+#         - name: gitea-http
+#           port: 3000

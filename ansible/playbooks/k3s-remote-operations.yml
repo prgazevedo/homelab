@@ -1,0 +1,259 @@
+---
+# K3s Remote Operations via Proxmox
+# Execute K3s commands remotely through the K3s master node
+# This playbook bridges the gap between local machine and K3s cluster
+
+- name: K3s Remote Operations
+  hosts: k3s_masters
+  gather_facts: yes
+  vars:
+    k3s_results_file: "{{ playbook_dir }}/../../k3s-remote-results.yml"
+    operation: "{{ k3s_operation | default('status') }}"
+    namespace: "{{ k3s_namespace | default('') }}"
+    app_name: "{{ k3s_app | default('') }}"
+    
+  tasks:
+    - name: Check if K3s is running
+      systemd:
+        name: k3s
+      register: k3s_service_status
+      become: yes
+
+    - name: Fail if K3s is not running
+      fail:
+        msg: "K3s service is not running on {{ inventory_hostname }}"
+      when: k3s_service_status.status.ActiveState != "active"
+
+    - name: Set kubectl command with proper kubeconfig
+      set_fact:
+        kubectl_cmd: "sudo k3s kubectl"
+
+    # Cluster Status Operations
+    - name: Get cluster info
+      command: "{{ kubectl_cmd }} cluster-info"
+      register: cluster_info
+      when: operation in ['status', 'info', 'cluster-info']
+      changed_when: false
+
+    - name: Get node status
+      command: "{{ kubectl_cmd }} get nodes -o wide"
+      register: nodes_status
+      when: operation in ['status', 'nodes']
+      changed_when: false
+
+    - name: Get all namespaces
+      command: "{{ kubectl_cmd }} get namespaces"
+      register: namespaces_list
+      when: operation in ['status', 'namespaces']
+      changed_when: false
+
+    - name: Get all pods across namespaces
+      command: "{{ kubectl_cmd }} get pods --all-namespaces"
+      register: all_pods
+      when: operation in ['status', 'pods']
+      changed_when: false
+
+    - name: Get all services
+      command: "{{ kubectl_cmd }} get services --all-namespaces"
+      register: all_services
+      when: operation in ['status', 'services']
+      changed_when: false
+
+    - name: Get all deployments
+      command: "{{ kubectl_cmd }} get deployments --all-namespaces"
+      register: all_deployments
+      when: operation in ['status', 'deployments', 'apps']
+      changed_when: false
+
+    - name: Get all ingresses
+      command: "{{ kubectl_cmd }} get ingress --all-namespaces"
+      register: all_ingresses
+      when: operation in ['status', 'ingress', 'network']
+      changed_when: false
+
+    - name: Get persistent volumes
+      command: "{{ kubectl_cmd }} get pv"
+      register: persistent_volumes
+      when: operation in ['status', 'storage', 'pv']
+      changed_when: false
+
+    - name: Get persistent volume claims
+      command: "{{ kubectl_cmd }} get pvc --all-namespaces"
+      register: persistent_volume_claims
+      when: operation in ['status', 'storage', 'pvc']
+      changed_when: false
+
+    # Resource Usage (if metrics server available)
+    - name: Get node resource usage
+      command: "{{ kubectl_cmd }} top nodes"
+      register: node_metrics
+      when: operation in ['status', 'metrics', 'resources']
+      failed_when: false
+      changed_when: false
+
+    - name: Get pod resource usage
+      command: "{{ kubectl_cmd }} top pods --all-namespaces"
+      register: pod_metrics
+      when: operation in ['status', 'metrics', 'resources']
+      failed_when: false
+      changed_when: false
+
+    # Events and Logs
+    - name: Get recent events
+      command: "{{ kubectl_cmd }} get events --all-namespaces --sort-by='.lastTimestamp'"
+      register: cluster_events
+      when: operation in ['events']
+      changed_when: false
+
+    - name: Get logs for specific namespace
+      command: "{{ kubectl_cmd }} logs --all-containers=true --tail=100 -n {{ namespace }} -l app.kubernetes.io/name"
+      register: namespace_logs
+      when: operation == 'logs' and namespace != ''
+      failed_when: false
+      changed_when: false
+
+    # Health Checks
+    - name: Check system pod health
+      command: "{{ kubectl_cmd }} get pods -n kube-system"
+      register: system_pods
+      when: operation in ['health']
+      changed_when: false
+
+    - name: Check for failed pods
+      command: "{{ kubectl_cmd }} get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded"
+      register: failed_pods
+      when: operation in ['health']
+      failed_when: false
+      changed_when: false
+
+    # Application-specific operations
+    - name: Get application details (if app specified)
+      command: "{{ kubectl_cmd }} get all -n {{ namespace }}"
+      register: app_details
+      when: operation == 'app-status' and namespace != ''
+      failed_when: false
+      changed_when: false
+
+    - name: Check if Gitea is deployed
+      command: "{{ kubectl_cmd }} get deployment gitea -n gitea"
+      register: gitea_status
+      when: operation in ['status', 'gitea']
+      failed_when: false
+      changed_when: false
+
+    - name: Check if PostgreSQL is deployed
+      command: "{{ kubectl_cmd }} get deployment -n postgresql"
+      register: postgresql_status
+      when: operation in ['status', 'postgresql']
+      failed_when: false
+      changed_when: false
+
+    - name: Check if ArgoCD is deployed
+      command: "{{ kubectl_cmd }} get deployment -n argocd"
+      register: argocd_status
+      when: operation in ['status', 'argocd']
+      failed_when: false
+      changed_when: false
+
+    - name: Check if monitoring stack is deployed
+      command: "{{ kubectl_cmd }} get deployment -n monitoring"
+      register: monitoring_status
+      when: operation in ['status', 'monitoring']
+      failed_when: false
+      changed_when: false
+
+    # Helm operations (if available)
+    - name: List Helm releases
+      command: helm list --all-namespaces
+      register: helm_releases
+      when: operation in ['status', 'helm']
+      failed_when: false
+      changed_when: false
+
+    # Storage operations
+    - name: Get storage class information
+      command: "{{ kubectl_cmd }} get storageclass"
+      register: storage_classes
+      when: operation in ['storage']
+      changed_when: false
+
+    # Build comprehensive results
+    - name: Build operation results
+      set_fact:
+        k3s_operation_results:
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          operation: "{{ operation }}"
+          cluster_host: "{{ inventory_hostname }}"
+          k3s_service_status: "{{ k3s_service_status.status.ActiveState }}"
+          results:
+            cluster_info: "{{ cluster_info.stdout_lines if cluster_info is defined and cluster_info.stdout_lines is defined else [] }}"
+            nodes: "{{ nodes_status.stdout_lines if nodes_status is defined and nodes_status.stdout_lines is defined else [] }}"
+            namespaces: "{{ namespaces_list.stdout_lines if namespaces_list is defined and namespaces_list.stdout_lines is defined else [] }}"
+            pods: "{{ all_pods.stdout_lines if all_pods is defined and all_pods.stdout_lines is defined else [] }}"
+            services: "{{ all_services.stdout_lines if all_services is defined and all_services.stdout_lines is defined else [] }}"
+            deployments: "{{ all_deployments.stdout_lines if all_deployments is defined and all_deployments.stdout_lines is defined else [] }}"
+            ingresses: "{{ all_ingresses.stdout_lines if all_ingresses is defined and all_ingresses.stdout_lines is defined else [] }}"
+            persistent_volumes: "{{ persistent_volumes.stdout_lines if persistent_volumes is defined and persistent_volumes.stdout_lines is defined else [] }}"
+            persistent_volume_claims: "{{ persistent_volume_claims.stdout_lines if persistent_volume_claims is defined and persistent_volume_claims.stdout_lines is defined else [] }}"
+            storage_classes: "{{ storage_classes.stdout_lines if storage_classes is defined and storage_classes.stdout_lines is defined else [] }}"
+            events: "{{ cluster_events.stdout_lines if cluster_events is defined and cluster_events.stdout_lines is defined else [] }}"
+            system_pods: "{{ system_pods.stdout_lines if system_pods is defined and system_pods.stdout_lines is defined else [] }}"
+            failed_pods: "{{ failed_pods.stdout_lines if failed_pods is defined and failed_pods.stdout_lines is defined else [] }}"
+            node_metrics: "{{ node_metrics.stdout_lines if node_metrics is defined and node_metrics.stdout_lines is defined and (node_metrics.rc is not defined or node_metrics.rc == 0) else ['Metrics server not available'] }}"
+            pod_metrics: "{{ pod_metrics.stdout_lines if pod_metrics is defined and pod_metrics.stdout_lines is defined and (pod_metrics.rc is not defined or pod_metrics.rc == 0) else ['Metrics server not available'] }}"
+            helm_releases: "{{ helm_releases.stdout_lines if helm_releases is defined and helm_releases.stdout_lines is defined and (helm_releases.rc is not defined or helm_releases.rc == 0) else ['Helm not available'] }}"
+            application_status:
+              gitea: "{{ 'Deployed' if gitea_status is defined and (gitea_status.rc is not defined or gitea_status.rc == 0) else 'Not Found' }}"
+              postgresql: "{{ 'Deployed' if postgresql_status is defined and (postgresql_status.rc is not defined or postgresql_status.rc == 0) else 'Not Found' }}"
+              argocd: "{{ 'Deployed' if argocd_status is defined and (argocd_status.rc is not defined or argocd_status.rc == 0) else 'Not Found' }}"
+              monitoring: "{{ 'Deployed' if monitoring_status is defined and (monitoring_status.rc is not defined or monitoring_status.rc == 0) else 'Not Found' }}"
+
+    - name: Display operation summary
+      debug:
+        msg: |
+          K3s Remote Operation: {{ operation }}
+          ======================================
+          Cluster: {{ inventory_hostname }}
+          K3s Status: {{ k3s_service_status.status.ActiveState }}
+          Nodes: {{ (nodes_status.stdout_lines | length - 1) if nodes_status is defined and nodes_status.stdout_lines is defined else 0 }}
+          Namespaces: {{ (namespaces_list.stdout_lines | length - 1) if namespaces_list is defined and namespaces_list.stdout_lines is defined else 0 }}
+          Total Pods: {{ (all_pods.stdout_lines | length - 1) if all_pods is defined and all_pods.stdout_lines is defined else 0 }}
+          Deployments: {{ (all_deployments.stdout_lines | length - 1) if all_deployments is defined and all_deployments.stdout_lines is defined else 0 }}
+          
+          Application Status:
+          - Gitea: {{ 'Deployed' if gitea_status is defined and (gitea_status.rc is not defined or gitea_status.rc == 0) else 'Not Found' }}
+          - PostgreSQL: {{ 'Deployed' if postgresql_status is defined and (postgresql_status.rc is not defined or postgresql_status.rc == 0) else 'Not Found' }}
+          - ArgoCD: {{ 'Deployed' if argocd_status is defined and (argocd_status.rc is not defined or argocd_status.rc == 0) else 'Not Found' }}
+          - Monitoring: {{ 'Deployed' if monitoring_status is defined and (monitoring_status.rc is not defined or monitoring_status.rc == 0) else 'Not Found' }}
+          
+          Results saved to: {{ k3s_results_file }}
+
+    - name: Export results to file
+      copy:
+        content: |
+          # K3s Remote Operation Results
+          # Generated: {{ ansible_date_time.iso8601 }}
+          # Operation: {{ operation }}
+          # Host: {{ inventory_hostname }}
+          
+          {{ k3s_operation_results | to_nice_yaml }}
+        dest: "{{ k3s_results_file }}"
+      delegate_to: localhost
+      run_once: true
+
+    # Specific output for different operations
+    - name: Show detailed cluster status
+      debug:
+        var: k3s_operation_results.results
+        verbosity: 1
+      when: operation == 'status'
+
+    - name: Show namespace logs
+      debug:
+        msg: "{{ namespace_logs.stdout_lines }}"
+      when: operation == 'logs' and namespace_logs is defined
+
+    - name: Show application details
+      debug:
+        msg: "{{ app_details.stdout_lines }}"
+      when: operation == 'app-status' and app_details is defined

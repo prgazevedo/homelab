@@ -1,0 +1,189 @@
+---
+# K3s Cluster Discovery Playbook
+# Discovers current state of K3s cluster including deployed applications
+# This playbook is separate from Proxmox discovery to handle cluster-internal sync
+
+- name: Discover K3s Cluster State
+  hosts: k3s_masters
+  gather_facts: yes
+  vars:
+    k3s_state_file: "{{ playbook_dir }}/../../k3s-cluster-state.yml"
+  
+  tasks:
+    - name: Check if kubectl is available
+      command: which kubectl
+      register: kubectl_check
+      failed_when: false
+      changed_when: false
+
+    - name: Get K3s cluster info
+      command: kubectl cluster-info
+      register: cluster_info
+      when: kubectl_check.rc == 0
+      changed_when: false
+
+    - name: Get K3s nodes status
+      command: kubectl get nodes -o wide
+      register: nodes_status
+      when: kubectl_check.rc == 0
+      changed_when: false
+
+    - name: Get all namespaces
+      command: kubectl get namespaces -o json
+      register: namespaces_raw
+      when: kubectl_check.rc == 0
+      changed_when: false
+
+    - name: Parse namespaces
+      set_fact:
+        namespaces: "{{ (namespaces_raw.stdout | from_json).items | map(attribute='metadata.name') | list }}"
+      when: kubectl_check.rc == 0
+
+    - name: Get all deployments across namespaces
+      command: kubectl get deployments --all-namespaces -o json
+      register: deployments_raw
+      when: kubectl_check.rc == 0
+      changed_when: false
+
+    - name: Get all services across namespaces
+      command: kubectl get services --all-namespaces -o json
+      register: services_raw
+      when: kubectl_check.rc == 0
+      changed_when: false
+
+    - name: Get all persistent volumes
+      command: kubectl get pv -o json
+      register: pv_raw
+      when: kubectl_check.rc == 0
+      changed_when: false
+      failed_when: false
+
+    - name: Get all persistent volume claims
+      command: kubectl get pvc --all-namespaces -o json
+      register: pvc_raw
+      when: kubectl_check.rc == 0
+      changed_when: false
+
+    - name: Get all configmaps across namespaces
+      command: kubectl get configmaps --all-namespaces -o json
+      register: configmaps_raw
+      when: kubectl_check.rc == 0
+      changed_when: false
+
+    - name: Get all secrets across namespaces (names only for security)
+      command: kubectl get secrets --all-namespaces -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.type --no-headers
+      register: secrets_info
+      when: kubectl_check.rc == 0
+      changed_when: false
+
+    - name: Get Helm releases (if Helm is available)
+      command: helm list --all-namespaces -o json
+      register: helm_releases_raw
+      when: kubectl_check.rc == 0
+      failed_when: false
+      changed_when: false
+
+    - name: Check ArgoCD applications (if ArgoCD is installed)
+      command: kubectl get applications -n argocd -o json
+      register: argocd_apps_raw
+      when: kubectl_check.rc == 0
+      failed_when: false
+      changed_when: false
+
+    - name: Parse deployments data
+      set_fact:
+        deployments: "{{ (deployments_raw.stdout | from_json).items | default([]) }}"
+      when: kubectl_check.rc == 0 and deployments_raw.rc == 0
+
+    - name: Parse services data
+      set_fact:
+        services: "{{ (services_raw.stdout | from_json).items | default([]) }}"
+      when: kubectl_check.rc == 0 and services_raw.rc == 0
+
+    - name: Parse PVC data
+      set_fact:
+        pvcs: "{{ (pvc_raw.stdout | from_json).items | default([]) }}"
+      when: kubectl_check.rc == 0 and pvc_raw.rc == 0
+
+    - name: Parse Helm releases
+      set_fact:
+        helm_releases: "{{ helm_releases_raw.stdout | from_json | default([]) }}"
+      when: kubectl_check.rc == 0 and helm_releases_raw.rc == 0
+
+    - name: Parse ArgoCD applications
+      set_fact:
+        argocd_apps: "{{ (argocd_apps_raw.stdout | from_json).items | default([]) }}"
+      when: kubectl_check.rc == 0 and argocd_apps_raw.rc == 0
+
+    - name: Build cluster state summary
+      set_fact:
+        cluster_state:
+          discovery_timestamp: "{{ ansible_date_time.iso8601 }}"
+          cluster_info:
+            kubectl_available: "{{ kubectl_check.rc == 0 }}"
+            cluster_accessible: "{{ cluster_info is defined and cluster_info.rc == 0 }}"
+          nodes:
+            status: "{{ nodes_status.stdout_lines | default([]) }}"
+            count: "{{ (nodes_status.stdout_lines | default([])) | length - 1 if nodes_status.stdout_lines is defined else 0 }}"
+          namespaces: "{{ namespaces | default([]) }}"
+          applications:
+            deployments: "{{ deployments | map(attribute='metadata') | map('combine', {'spec': deployments | map(attribute='spec')}) | list | default([]) }}"
+            services: "{{ services | selectattr('metadata.namespace', 'ne', 'kube-system') | map(attribute='metadata') | list | default([]) }}"
+            helm_releases: "{{ helm_releases | default([]) }}"
+            argocd_applications: "{{ argocd_apps | map(attribute='metadata.name') | list | default([]) }}"
+          storage:
+            persistent_volumes: "{{ (pv_raw.stdout | from_json).items | map(attribute='metadata.name') | list if pv_raw is defined and pv_raw.rc == 0 else [] }}"
+            persistent_volume_claims: "{{ pvcs | map(attribute='metadata') | list | default([]) }}"
+          security:
+            secrets_summary: "{{ secrets_info.stdout_lines | default([]) }}"
+
+    - name: Display cluster state summary
+      debug:
+        var: cluster_state
+        verbosity: 1
+
+    - name: Export cluster state to file
+      copy:
+        content: |
+          # K3s Cluster State Discovery
+          # Generated: {{ ansible_date_time.iso8601 }}
+          # Host: {{ inventory_hostname }}
+          
+          {{ cluster_state | to_nice_yaml }}
+        dest: "{{ k3s_state_file }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Show discovered applications summary
+      debug:
+        msg: |
+          K3s Cluster Discovery Summary:
+          =============================
+          Cluster Status: {{ 'Online' if cluster_info is defined and cluster_info.rc == 0 else 'Offline/Inaccessible' }}
+          Node Count: {{ (nodes_status.stdout_lines | default([])) | length - 1 if nodes_status.stdout_lines is defined else 0 }}
+          Namespaces: {{ namespaces | length if namespaces is defined else 0 }}
+          Deployments: {{ deployments | length if deployments is defined else 0 }}
+          Services: {{ (services | selectattr('metadata.namespace', 'ne', 'kube-system') | list) | length if services is defined else 0 }}
+          Helm Releases: {{ helm_releases | length if helm_releases is defined else 0 }}
+          ArgoCD Apps: {{ argocd_apps | length if argocd_apps is defined else 0 }}
+          PVCs: {{ pvcs | length if pvcs is defined else 0 }}
+          
+          State exported to: {{ k3s_state_file }}
+      run_once: true
+
+# Error handling for cluster access issues
+- name: Handle cluster access errors
+  hosts: k3s_masters
+  gather_facts: no
+  tasks:
+    - name: Display troubleshooting info if cluster is inaccessible
+      debug:
+        msg: |
+          Troubleshooting K3s Access:
+          ===========================
+          1. Verify K3s is running: sudo systemctl status k3s
+          2. Check kubectl config: kubectl config current-context
+          3. Verify kubeconfig: ls -la ~/.kube/config
+          4. Test connection: kubectl get nodes
+          5. Check K3s logs: sudo journalctl -u k3s -f
+      when: kubectl_check is defined and kubectl_check.rc != 0
