@@ -21,6 +21,7 @@ This is a unified Ansible-based homelab infrastructure project managing a Proxmo
   - ✅ Monitoring stack: Prometheus + Grafana (K3s) - Basic infrastructure monitoring
   - ✅ ArgoCD: GitOps platform (K3s) - http://192.168.2.103:30880
   - ✅ Forgejo: Git service (LXC Container) - http://192.168.2.200:3000
+  - ✅ Linkding: Bookmark service (Proxmox Host) - http://192.168.2.100:9091 (nginx proxy + Django backend)
 - **Hardware Capabilities**:
   - RTX2080 GPU: Available for AI/ML workloads (Container 100 integration pending)
   - ✅ Hardware monitoring: Complete Proxmox thermal and performance monitoring with Grafana dashboard
@@ -29,7 +30,7 @@ This is a unified Ansible-based homelab infrastructure project managing a Proxmo
 - **Infrastructure**: Proxmox VE
 - **Orchestration**: Ansible playbooks
 - **Container Platform**: K3s (lightweight Kubernetes) + LXC containers
-- **Database**: PostgreSQL (K3s), SQLite (Git service)
+- **Database**: PostgreSQL (K3s), SQLite (Git service, Bookmark service)
 - **Monitoring**: Prometheus + Grafana (K3s)
 - **GitOps**: ArgoCD (K3s)
 - **Git Service**: Forgejo (LXC Container 200 - 192.168.2.200:3000)
@@ -147,6 +148,19 @@ Steps needed to get the project running locally:
   - [x] Implement sensor analysis and smart filtering (excludes temp5/fan4 bogus sensors)
   - [x] Create diagnostic scripts for ongoing monitoring troubleshooting
   - [x] Archive development/experimental dashboards and scripts
+
+### Completed Features (Bookmark Service)
+- [x] **Linkding Bookmark Service** - Self-hosted bookmark management solution
+  - [x] Deploy Linkding service directly on Proxmox host for maximum availability
+  - [x] Implement production-grade nginx reverse proxy architecture (port 9091)
+  - [x] Configure Django backend with Gunicorn WSGI server (internal port 9090)
+  - [x] Solve static file serving issues with nginx (proper CSS/JS loading)
+  - [x] Create user account and API token (book / ProxBook1)
+  - [x] Enable Tailscale remote access for Work Mac compatibility
+  - [x] Configure browser extension integration (http://192.168.2.100:9091)
+  - [x] Test comprehensive functionality (CSS styling, API access, health checks)
+  - [x] Document production architecture and troubleshooting procedures
+  - [x] Solve Work Mac IT restrictions with independent bookmark access
 
 ### RTX2080 AI/ML Integration
 - [ ] **GPU Development Environment** - AI/ML workload framework

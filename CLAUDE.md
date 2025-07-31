@@ -40,6 +40,7 @@ The system works with any Proxmox homelab configuration. Your specific infrastru
 - **Key Services:**
   - Forgejo Git: http://192.168.2.200:3000 (prgazevedo / GiteaJourney1)
   - ArgoCD GitOps: http://192.168.2.103:30880 (admin / 5ygoY5iAG1cXmWZw)
+  - Linkding Bookmarks: http://192.168.2.100:9091 (book / ProxBook1) - Nginx proxy with CSS/JS
   - K3s Cluster: 3-node operational with local-path storage
 
 **Configuration File:** `homelab-config.yml` (gitignored, contains your specific details)
@@ -368,6 +369,109 @@ http://192.168.2.xxx:8888               # Jupyter Lab interface (when deployed)
 - **Jupyter Lab**: Interactive development environment
 - **CUDA Toolkit**: Low-level GPU programming and optimization
 - **Container Runtime**: NVIDIA Docker for isolated GPU environments
+
+## Linkding Bookmark Service (Proxmox Host)
+
+The Linkding bookmark service runs directly on the Proxmox host (192.168.2.100) as a foundational infrastructure service, providing web-based bookmark management accessible from any browser without dependency on Chrome sync or cloud storage.
+
+### Architecture Decision: Nginx Proxy + Django Backend
+**Service Architecture**: Nginx reverse proxy (port 9091) + Linkding backend (internal port 9090)
+- **Frontend (Nginx)**: Serves static files (CSS/JS) directly for optimal performance
+- **Backend (Linkding)**: Django application with Gunicorn WSGI server (internal access only)
+- **Benefits**: Production-grade static file serving, security, proper CSS/JS loading
+- **Ports**: External access via 9091, internal Django on 9090 (localhost only)
+
+### Current Service Status
+- **Service**: Linkding bookmark manager with nginx proxy
+- **External Access**: http://192.168.2.100:9091 (nginx proxy)
+- **Internal Backend**: http://127.0.0.1:9090 (Linkding Django app)
+- **User**: book / ProxBook1 (created with API token)
+- **Features**: Web interface, browser extensions, API access, import/export
+
+### Linkding Service Management
+```bash
+# Deploy complete nginx + Linkding setup
+./scripts/setup/configure-nginx-linkding.sh              # Complete nginx proxy setup
+./scripts/setup/create-linkding-user-token.sh            # Create user and API token
+
+# Service management
+systemctl status linkding                    # Check Linkding service status
+systemctl status nginx                       # Check nginx status
+systemctl restart linkding                   # Restart Linkding backend
+systemctl reload nginx                       # Reload nginx configuration
+
+# Diagnostics and troubleshooting
+./scripts/diagnostic/diagnose-nginx-linkding-issue.sh    # Comprehensive diagnostics
+./scripts/diagnostic/test-nginx-linkding.sh              # Quick connectivity tests
+```
+
+### Linkding Service Access
+```bash
+# Web Interface (PRODUCTION - Use this URL)  
+http://192.168.2.100:9091                   # Nginx proxy with proper CSS/JS
+Login: book / ProxBook1                      # Created user account
+
+# Tailscale Access (Remote access)
+http://TAILSCALE_IP:9091                     # Same interface via Tailscale
+
+# Internal Backend (Debugging only)
+http://127.0.0.1:9090                       # Direct Django app (localhost only)
+
+# Browser Extensions Setup
+Firefox: Use http://192.168.2.100:9091 as server URL
+Chrome: Use http://192.168.2.100:9091 as server URL
+API Token: Generated for 'book' user (check user settings)
+
+# API Access
+http://192.168.2.100:9091/api/              # REST API endpoint via nginx
+Authorization: Token YOUR_API_TOKEN_HERE    # Use token from user settings
+```
+
+### Working Architecture Details
+```bash
+# Nginx Configuration (Port 9091)
+/etc/nginx/sites-available/linkding         # Nginx site configuration
+/etc/nginx/sites-enabled/linkding           # Enabled site symlink
+
+# Linkding Configuration  
+/etc/systemd/system/linkding.service        # Systemd service (internal port 9090)
+/opt/linkding/linkding/                      # Application directory
+/opt/linkding/linkding/static/               # Static files served by nginx
+/opt/linkding/linkding/data/                 # Bookmark database and media
+
+# Service Architecture
+Nginx (0.0.0.0:9091)          # External access, serves static files
+  ↓ Proxy pass for dynamic content
+Linkding (127.0.0.1:9090)     # Internal Django app, database operations
+```
+
+### Linkding Service Features
+- **Production-Grade Performance**: Nginx serves CSS/JS, Django handles app logic
+- **Cross-Platform Access**: Works on Mac, mobile, any browser with proper styling
+- **No Cloud Dependency**: Self-hosted solution bypasses IT restrictions  
+- **Browser Integration**: Extensions work with http://192.168.2.100:9091
+- **Import/Export**: Migrate existing bookmarks from Chrome/Firefox
+- **Search and Tags**: Fast bookmark organization and retrieval
+- **API Access**: Full REST API with authentication tokens
+- **Tailscale Ready**: Remote access via Tailscale network
+- **Backup-Friendly**: SQLite database at /opt/linkding/linkding/data/
+
+### Post-Deployment Verification
+```bash
+# 1. Test web interface with proper CSS styling
+curl -s http://192.168.2.100:9091/static/theme-light.css | head -3
+
+# 2. Test nginx health endpoint
+curl -s http://192.168.2.100:9091/health
+
+# 3. Verify API access
+curl -H "Authorization: Token YOUR_TOKEN" http://192.168.2.100:9091/api/bookmarks/
+
+# 4. Check service logs
+journalctl -u linkding -f                   # Linkding application logs
+tail -f /var/log/nginx/access.log           # Nginx access logs
+tail -f /var/log/nginx/error.log            # Nginx error logs
+```
 
 ## Git Service Management (LXC Container)
 

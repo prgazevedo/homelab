@@ -162,6 +162,57 @@ case "$ACTION" in
         esac
         ;;
         
+    "linkding")
+        if [ $# -lt 2 ]; then
+            echo "Usage: $0 linkding <command>"
+            echo "Available commands: deploy, status, backup, create-user, access, logs"
+            echo "Example: $0 linkding deploy"
+            exit 1
+        fi
+        LINKDING_COMMAND="$2"
+        echo "🔖 Linkding Bookmark Service Management..."
+        case "$LINKDING_COMMAND" in
+            "deploy")
+                echo "🚀 Deploying Linkding bookmark service natively to Proxmox host..."
+                ./scripts/setup/deploy-linkding-native.sh "${3:-changeme123}"
+                ;;
+            "status")
+                echo "📊 Checking Linkding service status..."
+                ansible proxmox -i ansible/inventory.yml -m shell -a "systemctl status linkding" || \
+                echo "Run './homelab-unified.sh linkding deploy' to install"
+                ;;
+            "backup")
+                echo "💾 Creating Linkding data backup..."
+                BACKUP_DATE=$(date +%Y%m%d-%H%M%S)
+                ansible proxmox -i ansible/inventory.yml -m shell -a "cp -r /var/lib/linkding /var/lib/linkding-backup-$BACKUP_DATE"
+                echo "Backup created: /var/lib/linkding-backup-$BACKUP_DATE"
+                ;;
+            "create-user")
+                echo "👤 Creating Linkding superuser account..."
+                echo "Follow the prompts to create your admin account:"
+                ansible proxmox -i ansible/inventory.yml -m shell -a "sudo -u linkding bash -c 'cd /opt/linkding/linkding && source venv/bin/activate && python manage.py createsuperuser'"
+                ;;
+            "access")
+                echo "🌐 Linkding Access Information:"
+                PROXMOX_IP=$(ansible proxmox -i ansible/inventory.yml -m setup -a "filter=ansible_default_ipv4" | grep -o '"address": "[^"]*"' | cut -d'"' -f4)
+                echo "  Web Interface: http://$PROXMOX_IP:9090"
+                echo "  Default Admin: admin / changeme123 (change on first login)"
+                echo "  Browser Extensions:"
+                echo "    - Firefox: https://addons.mozilla.org/firefox/addon/linkding-extension/"
+                echo "    - Chrome: https://chrome.google.com/webstore/detail/linkding-extension/"
+                ;;
+            "logs")
+                echo "📋 Viewing Linkding service logs..."
+                ansible proxmox -i ansible/inventory.yml -m shell -a "journalctl -u linkding --tail 50 --no-pager"
+                ;;
+            *)
+                echo "❌ Unknown linkding command: $LINKDING_COMMAND"
+                echo "Available commands: deploy, status, backup, create-user, access, logs"
+                exit 1
+                ;;
+        esac
+        ;;
+        
     "help")
         echo "Unified Homelab Management Commands:"
         echo ""
@@ -205,6 +256,14 @@ case "$ACTION" in
         echo "  $0 gpu resources  - GPU specifications and AI/ML capabilities"
         echo "  $0 gpu setup      - GPU setup and configuration instructions"
         echo "  $0 gpu monitor    - GPU monitoring dashboard info"
+        echo ""
+        echo "🔖 Linkding Bookmark Service:"
+        echo "  $0 linkding deploy       - Deploy Linkding service to Proxmox host"
+        echo "  $0 linkding status       - Check Linkding service status"
+        echo "  $0 linkding access       - Show access URL and browser extension info"
+        echo "  $0 linkding create-user  - Create admin user account"
+        echo "  $0 linkding backup       - Backup bookmark data"
+        echo "  $0 linkding logs         - View service logs"
         echo ""
         echo "📋 Configuration File:"
         echo "  homelab-config.yml - Your specific infrastructure details (gitignored)"
