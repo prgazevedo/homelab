@@ -1,0 +1,25 @@
+# Node Exporter Hardware Monitoring Configuration
+# Enables temperature and fan speed monitoring via hwmon
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "prometheus-rules/hardware-alerts.yml"
+
+scrape_configs:
+  - job_name: 'proxmox-hardware'
+    static_configs:
+      - targets: ['192.168.2.100:9100']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    params:
+      collect[]:
+        - hwmon         # Hardware monitoring (temp, fans)
+        - thermal_zone  # Thermal zones
+        - cpu           # CPU metrics
+        - meminfo       # Memory information
+        - diskstats     # Disk statistics
+        - netdev        # Network device statistics
+        - filesystem    # Filesystem usage

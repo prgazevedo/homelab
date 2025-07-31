@@ -13,22 +13,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a homelab infrastructure-as-code project designed to manage a Proxmox homelab with K3s cluster through **unified Ansible-based automation**. The system provides complete DISMM (Discover, Import, Sync, Monitor, Maintain) workflow through a single command interface. The key principle is to import and sync existing infrastructure rather than recreate it.
+This is a homelab infrastructure-as-code project designed to manage a Proxmox homelab with K3s cluster and LXC containers through **unified Ansible-based automation**. The system provides complete DISMM (Discover, Import, Sync, Monitor, Maintain) workflow through a single command interface. The key principle is to import and sync existing infrastructure rather than recreate it.
+
+### Architecture Philosophy
+- **Separation of Concerns**: Git infrastructure (LXC) vs. application platform (K3s)
+- **Hardware Monitoring**: Proxmox thermal and performance monitoring with RTX2080 GPU integration
+- **AI/ML Integration**: RTX2080 GPU utilization for machine learning workloads and development
+- **Unified Management**: Single command interface for all infrastructure operations
+- **GitOps Workflow**: ArgoCD (K3s) monitors Git repositories (LXC) for automated deployments
 
 ## Infrastructure Layout
 
 The system works with any Proxmox homelab configuration. Your specific infrastructure details should be configured in `homelab-config.yml` (see `homelab-config.yml.example` for template).
 
-**Example Infrastructure:**
-- **Proxmox Host:** 192.168.2.100 (static IP)
-- **VMs with Static IPs:**
-  - VM 101 (W11-VM): 192.168.2.101
-  - VM 103 (K3s Master): 192.168.2.103  
-  - VM 104 (K3s Worker1): 192.168.2.104
-  - VM 105 (K3s Worker2): 192.168.2.105
-- **Containers:** LXC containers with custom VM IDs (100, 102)
-- **K3s Cluster:** 3-node cluster with sequential static IPs
-- **Services:** Customizable service deployments based on your needs
+**Current Infrastructure:**
+- **Proxmox Host:** 192.168.2.100 (https://192.168.2.100:8006)
+- **Virtual Machines:**
+  - VM 101 (W11-VM): 192.168.2.101 - Windows 11 workstation
+  - VM 103 (K3s Master): 192.168.2.103 - Kubernetes control plane
+  - VM 104 (K3s Worker1): 192.168.2.104 - Kubernetes worker node
+  - VM 105 (K3s Worker2): 192.168.2.105 - Kubernetes worker node
+- **LXC Containers:**
+  - Container 100 (AI-Dev): Stopped - RTX2080 GPU development environment
+  - Container 102 (Linux-DevBox): Running - Linux development environment
+  - Container 200 (Git-Service): Running - Forgejo Git service
+- **Key Services:**
+  - Forgejo Git: http://192.168.2.200:3000 (prgazevedo / GiteaJourney1)
+  - ArgoCD GitOps: http://192.168.2.103:30880 (admin / 5ygoY5iAG1cXmWZw)
+  - K3s Cluster: 3-node operational with local-path storage
 
 **Configuration File:** `homelab-config.yml` (gitignored, contains your specific details)
 
@@ -65,37 +77,72 @@ The system works with any Proxmox homelab configuration. Your specific infrastru
 ### Container Operations
 ```bash
 # Start container (lxc type) - use your actual container IDs
-./homelab-unified.sh start 200 lxc     # Start container 200
-./homelab-unified.sh start 201 lxc     # Start container 201
+./homelab-unified.sh start 100 lxc     # Start AI-Dev container
+./homelab-unified.sh start 102 lxc     # Start Linux-DevBox container
+./homelab-unified.sh start 200 lxc     # Start Git-Service container
 
 # Stop container
-./homelab-unified.sh stop 200 lxc      # Stop container 200
-./homelab-unified.sh stop 201 lxc      # Stop container 201
+./homelab-unified.sh stop 100 lxc      # Stop AI-Dev container
+./homelab-unified.sh stop 102 lxc      # Stop Linux-DevBox container  
+./homelab-unified.sh stop 200 lxc      # Stop Git-Service container
 
 # Restart container
-./homelab-unified.sh restart 200 lxc   # Restart container 200
+./homelab-unified.sh restart 200 lxc   # Restart Git-Service container
+```
+
+### Git Service Management (Forgejo in LXC)
+```bash
+# Git service unified management
+./homelab-unified.sh git status        # Git service container status
+./homelab-unified.sh git health        # Comprehensive health check
+./homelab-unified.sh git shell         # SSH into Git service container
+./homelab-unified.sh git service-status # Forgejo service status
+./homelab-unified.sh git service-logs  # View Forgejo service logs
+
+# Direct access methods
+ssh git@192.168.2.200                  # Direct SSH access to Git service
+curl -s http://192.168.2.200:3000/api/v1/version  # API health check
+
+# Hardware monitoring and GPU management (NEW)
+./homelab-unified.sh hardware status   # Proxmox hardware monitoring
+./homelab-unified.sh hardware temps    # Temperature and fan speed dashboard
+./homelab-unified.sh gpu status        # RTX2080 GPU utilization
+./homelab-unified.sh gpu resources     # GPU memory and compute usage
 ```
 
 ### K3s Cluster Management
 
-#### Overview
-K3s cluster access supports multiple connection modes:
-- **Local Mode**: Direct kubectl access via SSH tunnel (recommended for development)
-- **Remote Mode**: Ansible-based remote execution via Proxmox (recommended for automation)
-- **Auto Mode**: Automatically detects best available method (default)
+#### Cluster Status
+K3s cluster is operational with 3 nodes:
+- **Master**: k3s-master (192.168.2.103) - 4GB RAM, 2 CPU
+- **Worker1**: k3s-worker1 (192.168.2.104) - 4GB RAM, 2 CPU  
+- **Worker2**: k3s-worker2 (192.168.2.105) - 4GB RAM, 2 CPU
+- **Total Resources**: 12GB RAM, 6 CPU cores
+- **Storage**: local-path provisioner (working)
 
-#### Connection Setup
+#### Deployment Guidelines
 ```bash
-# Option 1: SSH Tunnel for Local kubectl Access
-./k3s-tunnel.sh start               # Setup SSH tunnel and kubeconfig
-./k3s-tunnel.sh status              # Check tunnel status
-./k3s-tunnel.sh stop                # Stop tunnel
+# Check cluster status
+ansible k3s-master -i ansible/inventory.yml -m shell -a "kubectl get nodes -o wide"
 
-# Option 2: Test Connectivity and Diagnostics
-./k3s-diagnostic.sh all             # Comprehensive connectivity test
-./k3s-diagnostic.sh network         # Basic network tests
-./k3s-diagnostic.sh tunnel          # SSH tunnel tests
+# Storage diagnostics
+./diagnose-storage.sh
+
+# Deploy applications using Ansible remote execution
+ansible k3s-master -i ansible/inventory.yml -m copy -a "src=manifests/ dest=/tmp/"
+ansible k3s-master -i ansible/inventory.yml -m shell -a "kubectl apply -f /tmp/"
 ```
+
+#### Architecture Decision: Separated Git Service
+**Git Service Architecture**: After extensive troubleshooting with K3s-hosted Git services, the architecture was redesigned:
+- **Previous Issues**: GitLab CE Helm chart persistent 422 errors, Gitea container runtime incompatibility
+- **Solution**: Dedicated LXC container (VM 200) running Forgejo Git service
+- **Benefits**: Isolation from application workloads, simpler troubleshooting, reliable operation
+- **GitOps Integration**: ArgoCD in K3s monitors Git repositories hosted in LXC container
+
+**Storage Setup**: Local-path provisioner working correctly for application workloads:
+- Directory: `/var/lib/rancher/k3s/storage` (auto-created by provisioner)
+- **Optimized**: K3s cluster now focused on application deployment rather than Git infrastructure
 
 #### Unified K3s Management
 ```bash
@@ -162,11 +209,14 @@ ansible-playbook ansible/playbooks/vm-operations.yml -e "proxmox_password=PASSWO
   - **monitoring/**: Prometheus and Grafana configurations
   - **namespaces/**: Namespace definitions
   - **base/**: Common configurations and kustomizations
-- **scripts/**: Organized management scripts
-  - **k3s/**: K3s cluster management scripts
-  - **proxmox/**: Proxmox VM discovery and operations
-  - **setup/**: Infrastructure setup and configuration scripts
-  - **diagnostic/**: Troubleshooting and diagnostic tools
+- **scripts/**: Organized management scripts (see scripts/README.md)
+  - **management/**: Daily operational scripts
+    - **git/**: Git service (Forgejo) management
+    - **k3s/**: K3s cluster management scripts
+    - **infrastructure/**: Infrastructure management scripts
+  - **diagnostic/**: Troubleshooting and monitoring
+  - **setup/**: Configuration and setup scripts
+  - **archive/**: Completed setup and reference scripts
 - **homelab-unified.sh**: Main entry point for all operations
 - **k3s.sh**: Quick K3s management wrapper
 - **vm-discovery.sh**: Quick VM discovery wrapper
@@ -214,6 +264,7 @@ The homelab uses a sequential static IP scheme for predictable networking:
 - **192.168.2.103** - VM 103 (k3s-master) - Kubernetes master node
 - **192.168.2.104** - VM 104 (k3s-worker1) - Kubernetes worker node 1
 - **192.168.2.105** - VM 105 (k3s-worker2) - Kubernetes worker node 2
+- **192.168.2.200** - Container 200 (git-service) - Forgejo Git service
 
 ### Network Configuration
 - **Gateway:** 192.168.2.1 (router)
@@ -228,23 +279,186 @@ The homelab uses a sequential static IP scheme for predictable networking:
 4. **Update inventory:** `./proxmox-vm-discovery.sh update-inventory`
 5. **Verify connectivity:** SSH and ping tests for all VMs
 
+## Hardware Monitoring & Performance
+
+The homelab includes comprehensive hardware monitoring for thermal management and performance optimization using Prometheus, Grafana, and node-exporter.
+
+### Hardware Monitoring Setup
+```bash
+# Core hardware monitoring setup
+./scripts/setup/setup-hardware-monitoring.sh        # Complete monitoring stack setup
+./scripts/setup/install-proxmox-node-exporter.sh    # Install node-exporter on Proxmox
+
+# Hardware monitoring diagnostics
+./scripts/diagnostic/analyze-all-sensors.sh         # Analyze available sensors
+./scripts/diagnostic/check-grafana-prometheus-connection.sh  # Test monitoring stack
+```
+
+### Monitoring Stack Components
+- **Prometheus**: Hardware metrics collection via node-exporter (http://192.168.2.103:30090)
+- **Grafana**: Hardware monitoring dashboards (http://192.168.2.103:30030)
+- **Node Exporter**: Hardware metrics collector installed on Proxmox host
+- **Dashboard**: `monitoring/grafana-dashboards/proxmox-hardware-refined.json` (working dashboard)
+
+### Monitored Hardware Sensors
+**✅ Temperature Sensors:**
+- **NVMe SSD**: nvme_nvme0 - temp1 (typically 61-65°C)
+- **CPU**: pci0000:00_0000:00:18_3 - temp1/temp3 (typically 65-67°C) 
+- **Motherboard**: Various temp1/temp2/temp3/temp4/temp6 sensors (54-69°C range)
+- **Filtered Out**: temp5 (216°C bogus reading automatically excluded)
+
+**✅ Fan Sensors:**
+- **Active Fans**: fan1 (520 RPM), fan2 (388 RPM), fan3 (2766 RPM - likely CPU fan)
+- **Filtered Out**: fan4 (0 RPM inactive fan automatically excluded)
+
+**✅ Storage Monitoring:**
+- **Container 200 Disk**: /rpool/data/subvol-200-disk-0 (primary storage)
+- **Root Filesystem**: / (system disk usage)
+- **Filtered Out**: /var/lib/lxcfs (virtual filesystem automatically excluded)
+
+**✅ System Metrics:**
+- **Voltages**: Power supply rail monitoring (12V, 5V, 3.3V)
+- **Current**: System power draw monitoring (~11A)
+- **CPU/Memory**: Performance utilization monitoring
+- **Network**: Interface throughput monitoring
+
+### Grafana Dashboard Access
+```bash
+# Access Grafana dashboard
+http://192.168.2.103:30030/dashboards
+
+# Import working dashboard
+Dashboard: "Proxmox Hardware Monitoring - Refined"
+File: monitoring/grafana-dashboards/proxmox-hardware-refined.json
+UID: proxmox-hardware-refined
+```
+
+### Hardware Monitoring Features
+- **Smart Filtering**: Automatically excludes bogus sensors (temp5, fan4, virtual filesystems)
+- **Real-time Monitoring**: 30-second refresh with 15-minute time window
+- **Color-coded Thresholds**: Green/Yellow/Red alerts for temperature and performance
+- **Multi-panel Layout**: Separate panels for temperatures, fans, storage, voltages, performance
+- **Historical Data**: Time-series trend analysis for all metrics
+
+## RTX2080 AI/ML Integration
+
+The homelab includes RTX2080 GPU integration for AI/ML workloads and development environments.
+
+### AI/ML Development Environment
+```bash
+# GPU-enabled container management
+./homelab-unified.sh start 100 lxc      # Start AI-Dev container with GPU passthrough
+./homelab-unified.sh gpu status         # Check GPU utilization and temperature
+./homelab-unified.sh gpu resources      # GPU memory and compute usage
+
+# AI/ML development access
+ssh ai-dev@192.168.2.xxx               # Direct SSH to AI development container
+http://192.168.2.xxx:8888               # Jupyter Lab interface (when deployed)
+```
+
+### RTX2080 GPU Capabilities
+- **CUDA Cores**: 2944 CUDA cores for parallel computing
+- **Memory**: 8GB GDDR6 for large model training
+- **Architecture**: Turing with RT cores and Tensor cores
+- **Use Cases**: Deep learning training, inference, computer vision, NLP
+- **Integration**: Docker with NVIDIA runtime, Kubernetes GPU operator
+
+### AI/ML Framework Support
+- **TensorFlow**: GPU-accelerated training and inference
+- **PyTorch**: CUDA support for neural network development
+- **Jupyter Lab**: Interactive development environment
+- **CUDA Toolkit**: Low-level GPU programming and optimization
+- **Container Runtime**: NVIDIA Docker for isolated GPU environments
+
+## Git Service Management (LXC Container)
+
+The Git service runs in a dedicated LXC container (VM 200) for reliability and isolation from the K3s cluster. This architecture decision was made after extensive troubleshooting with K3s-hosted Git services (GitLab CE, Gitea) to ensure stable, isolated Git infrastructure.
+
+### Current Git Service Status
+- **Service**: Forgejo (Gitea fork) running in LXC Container 200
+- **Access**: http://192.168.2.200:3000
+- **Admin**: prgazevedo / GiteaJourney1
+- **Features**: Git repos, GitHub mirroring, issues, pull requests
+- **Integration**: ArgoCD monitors repositories for GitOps deployments
+
+### Git Service Operations
+```bash
+# Create and deploy Git service LXC container
+./create-git-service-lxc.sh         # Create LXC container with Ubuntu 22.04
+./deploy-forgejo-lxc.sh             # Deploy Forgejo Git service
+
+# Service management via Ansible
+ansible git-service -i ansible/inventory.yml -m shell -a "systemctl status forgejo"
+ansible git-service -i ansible/inventory.yml -m shell -a "systemctl restart forgejo"
+ansible git-service -i ansible/inventory.yml -m shell -a "systemctl stop forgejo"
+ansible git-service -i ansible/inventory.yml -m shell -a "systemctl start forgejo"
+
+# Direct container management
+./homelab-unified.sh start 200 lxc   # Start Git service container
+./homelab-unified.sh stop 200 lxc    # Stop Git service container
+./homelab-unified.sh restart 200 lxc # Restart Git service container
+```
+
+### Git Service Access
+```bash
+# Web Interface
+http://192.168.2.200:3000           # Forgejo web interface
+
+# SSH Git Operations
+git clone git@192.168.2.200:user/repo.git
+git remote add origin git@192.168.2.200:user/repo.git
+
+# Direct SSH Access
+ssh git@192.168.2.200               # Direct SSH to Git service container
+```
+
+### Git Service Health Monitoring
+```bash
+# Check service status
+curl -s http://192.168.2.200:3000/api/v1/version
+
+# Monitor logs
+ansible git-service -i ansible/inventory.yml -m shell -a "journalctl -u forgejo -f"
+
+# Check disk usage
+ansible git-service -i ansible/inventory.yml -m shell -a "df -h /var/lib/forgejo"
+
+# Check process status
+ansible git-service -i ansible/inventory.yml -m shell -a "ps aux | grep forgejo"
+```
+
+### Git Service Configuration
+```bash
+# Service configuration files
+/etc/forgejo/app.ini                # Main Forgejo configuration
+/var/lib/forgejo/forgejo.db         # SQLite database
+/var/lib/forgejo/repositories       # Git repositories storage
+/var/lib/forgejo/log               # Service logs
+```
+
+### GitOps Integration
+```bash
+# ArgoCD monitors Git repositories in LXC container
+# Applications deployed to K3s cluster based on Git changes
+# Clean separation: Git infrastructure vs. application platform
+
+# Update ArgoCD to monitor LXC Git repositories
+kubectl edit configmap argocd-cm -n argocd
+# Add repository: http://192.168.2.200:3000/user/repo.git
+```
+
 ## K3s Manifests Management
 
 ### Application Deployment
 ```bash
-# Deploy Gitea (requires PostgreSQL)
-cd k3s/gitea
-./deploy-gitea.sh
+# Deploy applications to K3s cluster (application workloads only)
+kubectl apply -f manifests/
+kubectl apply -f k3s/monitoring/
+kubectl apply -f k3s/argocd/
 
-# Manual deployment steps
-kubectl apply -f ../namespaces/gitea-namespace.yml
-kubectl apply -f manifests/gitea-secret.yml      # Update secrets first!
-kubectl apply -f manifests/gitea-configmap.yml
-kubectl apply -f manifests/gitea-pvc.yml
-kubectl apply -f manifests/gitea-deployment.yml
-kubectl apply -f manifests/gitea-service.yml
-kubectl apply -f manifests/gitea-ingress.yml
-kubectl apply -f manifests/gitea-servicemonitor.yml
+# GitOps-based deployment via ArgoCD
+# ArgoCD monitors Git repositories in LXC container (192.168.2.200:3000)
+# Applications automatically deployed based on Git changes
 ```
 
 ### K3s Cluster Operations
@@ -255,52 +469,51 @@ kubectl get namespaces
 kubectl get pods --all-namespaces
 
 # Monitor applications
-kubectl get all -n gitea
-kubectl get all -n postgresql
 kubectl get all -n argocd
+kubectl get all -n monitoring
+kubectl get all -n postgresql
 
 # View logs
-kubectl logs -n gitea -l app.kubernetes.io/name=gitea
-kubectl describe pod -n gitea <pod-name>
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server
+kubectl describe pod -n argocd <pod-name>
 
 # Access services locally
-kubectl port-forward -n gitea svc/gitea-http 3000:3000
+kubectl port-forward -n argocd svc/argocd-server 8080:80
 ```
 
 ### Secret Management
 ```bash
 # View secret names (not values)
-kubectl get secrets -n gitea
+kubectl get secrets -n argocd
+kubectl get secrets -n monitoring
 
-# Update secret values (for production)
-kubectl create secret generic gitea-secret \
-  --from-literal=gitea-db-password='secure_password' \
-  --from-literal=gitea-secret-key='generated_64_char_key' \
-  --from-literal=gitea-internal-token='generated_token' \
-  --dry-run=client -o yaml | kubectl apply -f -
+# Update ArgoCD admin password (for production)
+kubectl -n argocd patch secret argocd-initial-admin-secret \
+  -p '{"stringData": {"password": "new-secure-password"}}'
 ```
 
 ### Storage Management
 ```bash
 # Check persistent volumes
 kubectl get pv
-kubectl get pvc -n gitea
+kubectl get pvc --all-namespaces
 
-# Monitor storage usage
-kubectl exec -n gitea -it deployment/gitea -- df -h /data
+# Monitor storage usage for applications
+kubectl exec -n argocd -it deployment/argocd-server -- df -h
+kubectl top nodes
 ```
 
 ### Troubleshooting
 ```bash
 # Debug networking
-kubectl exec -n gitea -it deployment/gitea -- nslookup postgresql.postgresql.svc.cluster.local
+kubectl exec -n argocd -it deployment/argocd-server -- nslookup kubernetes.default.svc.cluster.local
 
-# Test database connectivity
-kubectl exec -n gitea -it deployment/gitea -- nc -zv postgresql.postgresql.svc.cluster.local 5432
+# Test Git service connectivity from K3s
+kubectl run test-pod --image=busybox --restart=Never -- wget -qO- http://192.168.2.200:3000/api/v1/version
 
 # Check resource usage
 kubectl top nodes
-kubectl top pods -n gitea
+kubectl top pods --all-namespaces
 ```
 
 ## Workflow Patterns
@@ -337,6 +550,29 @@ kubectl top pods -n gitea
 - **MANUAL TESTING REQUIRED**: All scripts and playbooks must be tested manually by the user
 - **SCRIPT VALIDATION ONLY**: Claude Code can create and validate scripts but cannot execute network operations
 - **USER EXECUTION**: User must run `./homelab-unified.sh`, ansible-playbook commands, and kubectl manually
+
+### Script Output Requirements - MANDATORY
+- **LOG TO FILE**: ALL diagnostic and operational scripts MUST output results to timestamped log files
+- **DUAL OUTPUT**: Scripts MUST use `tee` to write to both stdout and log files simultaneously
+- **LOG DIRECTORY**: Store logs in `logs/` directory with descriptive filenames
+- **TIMESTAMP FORMAT**: Use format: `logs/script-name-YYYYMMDD-HHMMSS.log`
+- **STANDARD PATTERN**: Every script MUST include this logging setup:
+  ```bash
+  # Create logs directory if it doesn't exist
+  mkdir -p logs
+  
+  # Set up logging
+  LOGFILE="logs/script-name-$(date +%Y%m%d-%H%M%S).log"
+  exec > >(tee -a "$LOGFILE")
+  exec 2>&1
+  
+  echo "🔍 Script Title"
+  echo "==============="
+  echo "Log file: $LOGFILE"
+  echo "Timestamp: $(date)"
+  echo ""
+  ```
+- **NEVER CREATE SCRIPTS WITHOUT LOGGING**: This is mandatory for all homelab scripts
 
 ### Credential Management
 - Proxmox credentials stored securely in macOS keychain
