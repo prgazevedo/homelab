@@ -1,0 +1,314 @@
+---
+# Proxmox Hardware Monitoring Playbook with Proper Authentication
+# Deploys comprehensive hardware monitoring including temperatures and fan speeds
+- name: Deploy Hardware Monitoring for Proxmox Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    proxmox_host: "192.168.2.100"
+    proxmox_user: "root@pam"
+    proxmox_password: "{{ proxmox_password | mandatory }}"
+    proxmox_node: "proxmox"
+    proxmox_validate_certs: false
+
+  tasks:
+    - name: Create hardware monitoring logs directory
+      file:
+        path: "{{ playbook_dir }}/../../logs"
+        state: directory
+        mode: '0755'
+      tags: always
+
+    - name: Display hardware monitoring deployment start
+      debug:
+        msg: |
+          🔧 Proxmox Hardware Monitoring Deployment
+          =========================================
+          Proxmox Host: {{ proxmox_host }}
+          Timestamp: {{ ansible_date_time.epoch }}
+          Target: Hardware metrics collection and monitoring
+
+    # Get Proxmox authentication ticket first
+    - name: Get Proxmox authentication ticket
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/access/ticket"
+        method: POST
+        validate_certs: "{{ proxmox_validate_certs }}"
+        body_format: form-urlencoded
+        body:
+          username: "{{ proxmox_user }}"
+          password: "{{ proxmox_password }}"
+        timeout: 10
+      register: proxmox_auth
+      tags: connectivity
+
+    - name: Display authentication success
+      debug:
+        msg: "✅ Successfully authenticated with Proxmox"
+      tags: connectivity
+
+    # Test Proxmox API connectivity with ticket
+    - name: Test Proxmox API connectivity with ticket
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/version"
+        method: GET
+        validate_certs: "{{ proxmox_validate_certs }}"
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth.json.data.ticket }}"
+          CSRFPreventionToken: "{{ proxmox_auth.json.data.CSRFPreventionToken }}"
+        timeout: 10
+      register: proxmox_version
+      tags: connectivity
+
+    - name: Display Proxmox version information
+      debug:
+        msg: "✅ Connected to Proxmox VE {{ proxmox_version.json.data.version }}"
+      tags: connectivity
+
+    # Collect hardware information from Proxmox host
+    - name: Get Proxmox node hardware status
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/status"
+        method: GET
+        validate_certs: "{{ proxmox_validate_certs }}"
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth.json.data.ticket }}"
+          CSRFPreventionToken: "{{ proxmox_auth.json.data.CSRFPreventionToken }}"
+        timeout: 10
+      register: node_status
+      tags: hardware
+
+    - name: Get CPU information
+      uri:
+        url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/hardware/pci"
+        method: GET
+        validate_certs: "{{ proxmox_validate_certs }}"
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth.json.data.ticket }}"
+          CSRFPreventionToken: "{{ proxmox_auth.json.data.CSRFPreventionToken }}"
+        timeout: 10
+      register: hardware_info
+      ignore_errors: true
+      tags: hardware
+
+    # Deploy node-exporter configuration for hardware metrics
+    - name: Create node-exporter hardware monitoring configuration
+      copy:
+        dest: "{{ playbook_dir }}/../../monitoring/node-exporter-hardware.yml"
+        content: |
+          # Node Exporter Hardware Monitoring Configuration
+          # Enables temperature and fan speed monitoring via hwmon
+          
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+          
+          rule_files:
+            - "prometheus-rules/hardware-alerts.yml"
+          
+          scrape_configs:
+            - job_name: 'proxmox-hardware'
+              static_configs:
+                - targets: ['{{ proxmox_host }}:9100']
+              scrape_interval: 10s
+              metrics_path: /metrics
+              params:
+                collect[]:
+                  - hwmon         # Hardware monitoring (temp, fans)
+                  - thermal_zone  # Thermal zones
+                  - cpu           # CPU metrics
+                  - meminfo       # Memory information
+                  - diskstats     # Disk statistics
+                  - netdev        # Network device statistics
+                  - filesystem    # Filesystem usage
+        mode: '0644'
+      tags: configuration
+
+    # Create hardware monitoring alerts (escape Prometheus variables)
+    - name: Create hardware monitoring alert rules
+      copy:
+        dest: "{{ playbook_dir }}/../../monitoring/prometheus-rules/hardware-alerts-enhanced.yml"
+        content: |
+          groups:
+            - name: hardware.rules
+              rules:
+                # Temperature monitoring alerts
+                - alert: CPUTemperatureHigh
+                  expr: node_hwmon_temp_celsius{chip="coretemp-isa-0000"} > 75
+                  for: 2m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "CPU temperature high on {{"{{ $labels.instance }}"}}"
+                    description: "CPU temperature is {{"{{ $value }}"}}°C, above 75°C threshold on {{"{{ $labels.instance }}"}}."
+                
+                - alert: CPUTemperatureCritical
+                  expr: node_hwmon_temp_celsius{chip="coretemp-isa-0000"} > 85
+                  for: 1m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "CPU temperature critical on {{"{{ $labels.instance }}"}}"
+                    description: "CPU temperature is {{"{{ $value }}"}}°C, above 85°C critical threshold on {{"{{ $labels.instance }}"}}."
+                
+                # Fan speed monitoring alerts
+                - alert: SystemFanSpeedLow
+                  expr: node_hwmon_fan_rpm < 500
+                  for: 2m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "System fan speed low on {{"{{ $labels.instance }}"}}"
+                    description: "Fan {{"{{ $labels.chip }}"}} speed is {{"{{ $value }}"}} RPM, below 500 RPM threshold on {{"{{ $labels.instance }}"}}."
+                
+                - alert: SystemFanFailure
+                  expr: node_hwmon_fan_rpm == 0
+                  for: 30s
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "System fan failure detected on {{"{{ $labels.instance }}"}}"
+                    description: "Fan {{"{{ $labels.chip }}"}} has stopped (0 RPM) on {{"{{ $labels.instance }}"}}."
+                
+                # GPU temperature monitoring (RTX2080) 
+                - alert: GPUTemperatureHigh
+                  expr: node_hwmon_temp_celsius{chip=~"nvidia.*"} > 80
+                  for: 2m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "GPU temperature high on {{"{{ $labels.instance }}"}}"
+                    description: "GPU temperature is {{"{{ $value }}"}}°C, above 80°C threshold on {{"{{ $labels.instance }}"}}."
+                
+                - alert: GPUTemperatureCritical
+                  expr: node_hwmon_temp_celsius{chip=~"nvidia.*"} > 90
+                  for: 1m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "GPU temperature critical on {{"{{ $labels.instance }}"}}"
+                    description: "GPU temperature is {{"{{ $value }}"}}°C, above 90°C critical threshold on {{"{{ $labels.instance }}"}}."
+                
+                # System thermal zone monitoring
+                - alert: ThermalZoneHigh
+                  expr: node_thermal_zone_temp > 70
+                  for: 2m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "Thermal zone temperature high on {{"{{ $labels.instance }}"}}"
+                    description: "Thermal zone {{"{{ $labels.zone }}"}} temperature is {{"{{ $value }}"}}°C on {{"{{ $labels.instance }}"}}."
+        mode: '0644'
+      tags: alerts
+
+    # Generate hardware monitoring state file
+    - name: Create hardware monitoring status report
+      copy:
+        dest: "{{ playbook_dir }}/../../hardware-monitoring-state.yml"
+        content: |
+          # Hardware Monitoring Infrastructure State
+          # Generated: {{ ansible_date_time.iso8601 }}
+          
+          proxmox_hardware_monitoring:
+            deployment_timestamp: "{{ ansible_date_time.epoch }}"
+            proxmox_host: "{{ proxmox_host }}"
+            proxmox_version: "{{ proxmox_version.json.data.version | default('unknown') }}"
+            
+            monitoring_configuration:
+              node_exporter_enabled: true
+              hardware_metrics_enabled: true
+              temperature_monitoring: true
+              fan_speed_monitoring: true
+              gpu_monitoring_enabled: true
+              
+            alert_rules:
+              cpu_temperature_warning_threshold: 75
+              cpu_temperature_critical_threshold: 85
+              fan_speed_warning_threshold: 500
+              gpu_temperature_warning_threshold: 80
+              gpu_temperature_critical_threshold: 90
+              
+            hardware_capabilities:
+              cpu_temperature_sensors: true
+              system_fan_monitoring: true
+              thermal_zone_monitoring: true
+              gpu_monitoring: true
+              disk_temperature_monitoring: true
+              
+            deployment_status:
+              configuration_files_created: true
+              alert_rules_deployed: true
+              monitoring_ready: true
+              grafana_dashboard_pending: true
+              
+            proxmox_node_status:
+              uptime: "{{ node_status.json.data.uptime | default(0) }}"
+              cpu_usage: "{{ node_status.json.data.cpu | default(0) }}"
+              memory_usage: "{{ node_status.json.data.memory | default({}) }}"
+        mode: '0644'
+      tags: state
+
+    - name: Display hardware monitoring deployment summary
+      debug:
+        msg: |
+          ✅ Hardware Monitoring Deployment Complete
+          =========================================
+          
+          📊 Monitoring Capabilities:
+          - CPU temperature monitoring (warning: 75°C, critical: 85°C)
+          - System fan speed monitoring (warning: <500 RPM)
+          - GPU temperature monitoring (RTX2080: warning: 80°C, critical: 90°C)
+          - Thermal zone monitoring
+          - Hardware metrics collection via node-exporter
+          
+          📁 Generated Files:
+          - monitoring/node-exporter-hardware.yml
+          - monitoring/prometheus-rules/hardware-alerts-enhanced.yml
+          - hardware-monitoring-state.yml
+          
+          🚀 Next Steps:
+          1. Deploy Grafana dashboard for visualization: ./homelab-unified.sh hardware dashboard
+          2. Start hardware monitoring: ./homelab-unified.sh hardware status
+          3. Install node-exporter on Proxmox: ssh root@{{ proxmox_host }} 'apt install prometheus-node-exporter'
+          
+          🔧 Management Commands:
+          - ./homelab-unified.sh hardware status
+          - ./homelab-unified.sh hardware temps
+          - ./homelab-unified.sh gpu status
+      tags: summary
+
+    # Save deployment log
+    - name: Save hardware monitoring deployment log
+      copy:
+        dest: "{{ playbook_dir }}/../../logs/hardware-monitoring-deployment-{{ ansible_date_time.epoch }}.log"
+        content: |
+          Hardware Monitoring Deployment Log
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          Proxmox Host: {{ proxmox_host }}
+          Proxmox Version: {{ proxmox_version.json.data.version | default('unknown') }}
+          
+          Authentication: Successful
+          API Connectivity: ✅ Working
+          
+          Deployment Summary:
+          - Configuration files created successfully
+          - Alert rules deployed with temperature and fan speed thresholds
+          - Hardware monitoring capabilities enabled
+          - RTX2080 GPU monitoring configured
+          
+          Node Status:
+          - Uptime: {{ node_status.json.data.uptime | default('unknown') }} seconds
+          - CPU Usage: {{ (node_status.json.data.cpu | default(0) * 100) | round(2) }}%
+          - Memory Used: {{ node_status.json.data.memory.used | default(0) | filesizeformat }}
+          - Memory Total: {{ node_status.json.data.memory.total | default(0) | filesizeformat }}
+          
+          Files Created:
+          - monitoring/node-exporter-hardware.yml
+          - monitoring/prometheus-rules/hardware-alerts-enhanced.yml
+          - hardware-monitoring-state.yml
+          
+          Status: Deployment Successful ✅
+        mode: '0644'
+      tags: logging

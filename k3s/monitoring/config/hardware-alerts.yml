@@ -1,0 +1,69 @@
+groups:
+  - name: hardware.rules
+    rules:
+      # Temperature monitoring alerts
+      - alert: CPUTemperatureHigh
+        expr: node_hwmon_temp_celsius{chip="coretemp-isa-0000"} > 75
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU temperature high on {{ $labels.instance }}"
+          description: "CPU temperature is {{ $value }}°C, above 75°C threshold on {{ $labels.instance }}."
+      
+      - alert: CPUTemperatureCritical
+        expr: node_hwmon_temp_celsius{chip="coretemp-isa-0000"} > 85
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CPU temperature critical on {{ $labels.instance }}"
+          description: "CPU temperature is {{ $value }}°C, above 85°C critical threshold on {{ $labels.instance }}."
+      
+      # Fan speed monitoring alerts
+      - alert: SystemFanSpeedLow
+        expr: node_hwmon_fan_rpm < 500
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "System fan speed low on {{ $labels.instance }}"
+          description: "Fan {{ $labels.chip }} speed is {{ $value }} RPM, below 500 RPM threshold on {{ $labels.instance }}."
+      
+      - alert: SystemFanFailure
+        expr: node_hwmon_fan_rpm == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "System fan failure detected on {{ $labels.instance }}"
+          description: "Fan {{ $labels.chip }} has stopped (0 RPM) on {{ $labels.instance }}."
+      
+      # GPU temperature monitoring (RTX2080) 
+      - alert: GPUTemperatureHigh
+        expr: node_hwmon_temp_celsius{chip=~"nvidia.*"} > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GPU temperature high on {{ $labels.instance }}"
+          description: "GPU temperature is {{ $value }}°C, above 80°C threshold on {{ $labels.instance }}."
+      
+      - alert: GPUTemperatureCritical
+        expr: node_hwmon_temp_celsius{chip=~"nvidia.*"} > 90
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GPU temperature critical on {{ $labels.instance }}"
+          description: "GPU temperature is {{ $value }}°C, above 90°C critical threshold on {{ $labels.instance }}."
+      
+      # System thermal zone monitoring
+      - alert: ThermalZoneHigh
+        expr: node_thermal_zone_temp > 70
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Thermal zone temperature high on {{ $labels.instance }}"
+          description: "Thermal zone {{ $labels.zone }} temperature is {{ $value }}°C on {{ $labels.instance }}."

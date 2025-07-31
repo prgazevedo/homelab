@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "hardware-alerts.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  
+  - job_name: 'proxmox-hardware'
+    static_configs:
+      - targets: ['192.168.2.100:9100']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    params:
+      collect[]:
+        - hwmon
+        - thermal_zone
+        - cpu
+        - meminfo
+        - diskstats
+        - netdev
+        - filesystem
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'proxmox-host'
+  
+  - job_name: 'kubernetes-nodes'
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '(.*):10250'
+        target_label: __address__
+        replacement: '${1}:9100'

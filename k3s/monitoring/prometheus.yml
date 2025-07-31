@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - name: prometheus
+        image: prom/prometheus:latest
+        ports:
+        - containerPort: 9090
+        args:
+          - '--config.file=/etc/prometheus/prometheus.yml'
+          - '--storage.tsdb.path=/prometheus/'
+          - '--web.console.libraries=/etc/prometheus/console_libraries'
+          - '--web.console.templates=/etc/prometheus/consoles'
+          - '--storage.tsdb.retention.time=200h'
+          - '--web.enable-lifecycle'
+        volumeMounts:
+        - name: prometheus-config
+          mountPath: /etc/prometheus/
+        - name: prometheus-storage
+          mountPath: /prometheus/
+      volumes:
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+      - name: prometheus-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  type: NodePort
+  ports:
+  - port: 9090
+    targetPort: 9090
+    nodePort: 30090
+  selector:
+    app: prometheus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      - "hardware-alerts.yml"
+    
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      - job_name: 'proxmox-hardware'
+        static_configs:
+          - targets: ['192.168.2.100:9100']
+        scrape_interval: 10s
+        metrics_path: /metrics
+        params:
+          collect[]:
+            - hwmon
+            - thermal_zone
+            - cpu
+            - meminfo
+            - diskstats
+            - netdev
+            - filesystem
+      
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: '(.*):10250'
+            target_label: __address__
+            replacement: '${1}:9100'
+  
+  hardware-alerts.yml: |
+    groups:
+      - name: hardware.rules
+        rules:
+          - alert: CPUTemperatureHigh
+            expr: node_hwmon_temp_celsius{chip="coretemp-isa-0000"} > 75
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "CPU temperature high on {{ $labels.instance }}"
+              description: "CPU temperature is {{ $value }}°C, above 75°C threshold."
+          
+          - alert: CPUTemperatureCritical
+            expr: node_hwmon_temp_celsius{chip="coretemp-isa-0000"} > 85
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "CPU temperature critical on {{ $labels.instance }}"
+              description: "CPU temperature is {{ $value }}°C, above 85°C critical threshold."
+          
+          - alert: SystemFanFailure
+            expr: node_hwmon_fan_rpm == 0
+            for: 30s
+            labels:
+              severity: critical
+            annotations:
+              summary: "System fan failure detected on {{ $labels.instance }}"
+              description: "Fan has stopped (0 RPM) on {{ $labels.instance }}."
