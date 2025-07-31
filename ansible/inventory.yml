@@ -69,6 +69,21 @@ all:
           memory: 8192
           status: running
           
+        git-service:
+          ansible_host: 192.168.2.200  # Dedicated Git service LXC
+          ansible_user: git
+          vmid: 200
+          cores: 2
+          memory: 2048
+          status: running
+          # SSH Jump Host Configuration
+          ansible_ssh_common_args: '-o ProxyJump=root@192.168.2.100 -o StrictHostKeyChecking=no'
+          ansible_ssh_extra_args: '-o UserKnownHostsFile=/dev/null'
+          # Git service specific config
+          git_service_port: 3000
+          git_data_dir: /var/lib/forgejo
+          git_config_dir: /etc/forgejo
+          
     windows:
       hosts:
         w11-vm:

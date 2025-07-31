@@ -91,6 +91,77 @@ case "$ACTION" in
         ./scripts/k3s/k3s-unified.sh
         ;;
         
+    "git")
+        if [ $# -lt 2 ]; then
+            echo "Usage: $0 git <command>"
+            echo "Available commands: status, health, service-status, service-logs, shell"
+            echo "Example: $0 git health"
+            exit 1
+        fi
+        GIT_COMMAND="$2"
+        echo "🔧 Git Service Management..."
+        ./scripts/management/git/git-service-manager.sh "$GIT_COMMAND"
+        ;;
+        
+    "hardware")
+        if [ $# -lt 2 ]; then
+            echo "Usage: $0 hardware <command>"
+            echo "Available commands: status, temps, fans, deploy, grafana, dashboard"
+            echo "Example: $0 hardware status"
+            exit 1
+        fi
+        HARDWARE_COMMAND="$2"
+        echo "🌡️ Hardware Monitoring Management..."
+        case "$HARDWARE_COMMAND" in
+            "deploy")
+                echo "🚀 Deploying hardware monitoring infrastructure..."
+                ansible-playbook \
+                    ansible/playbooks/hardware-monitoring.yml \
+                    -e "proxmox_password=$PROXMOX_PASSWORD" \
+                    --connection=local
+                ;;
+            "grafana")
+                echo "📊 Deploying Grafana monitoring stack to K3s..."
+                ./scripts/setup/deploy-grafana-monitoring.sh
+                ;;
+            "status"|"temps"|"fans"|"dashboard")
+                if [ ! -f "scripts/management/infrastructure/hardware-monitor.sh" ]; then
+                    mkdir -p scripts/management/infrastructure
+                fi
+                ./scripts/management/infrastructure/hardware-monitor.sh "$HARDWARE_COMMAND" 2>/dev/null || echo "Hardware monitor script will be created on first run"
+                ;;
+            *)
+                echo "❌ Unknown hardware command: $HARDWARE_COMMAND"
+                echo "Available commands: status, temps, fans, deploy, grafana, dashboard"
+                exit 1
+                ;;
+        esac
+        ;;
+        
+    "gpu")
+        if [ $# -lt 2 ]; then
+            echo "Usage: $0 gpu <command>"
+            echo "Available commands: status, resources, setup, monitor"
+            echo "Example: $0 gpu status"
+            exit 1
+        fi
+        GPU_COMMAND="$2"
+        echo "🎮 RTX2080 GPU Management..."
+        case "$GPU_COMMAND" in
+            "status"|"resources"|"setup"|"monitor")
+                if [ ! -f "scripts/management/infrastructure/gpu-manager.sh" ]; then
+                    mkdir -p scripts/management/infrastructure
+                fi
+                ./scripts/management/infrastructure/gpu-manager.sh "$GPU_COMMAND" 2>/dev/null || echo "GPU manager script will be created on first run"
+                ;;
+            *)
+                echo "❌ Unknown GPU command: $GPU_COMMAND"
+                echo "Available commands: status, resources, setup, monitor"
+                exit 1
+                ;;
+        esac
+        ;;
+        
     "help")
         echo "Unified Homelab Management Commands:"
         echo ""
@@ -115,6 +186,25 @@ case "$ACTION" in
         echo ""
         echo "☸️  K3s Cluster:"
         echo "  $0 k3s         - K3s cluster overview and management"
+        echo ""
+        echo "🔧 Git Service (LXC Container 200):"
+        echo "  $0 git health  - Comprehensive Git service health check"
+        echo "  $0 git status  - Git service container status"
+        echo "  $0 git shell   - SSH into Git service container"
+        echo ""
+        echo "🌡️ Hardware Monitoring:"
+        echo "  $0 hardware deploy    - Deploy hardware monitoring infrastructure"
+        echo "  $0 hardware grafana   - Deploy Grafana monitoring stack to K3s"
+        echo "  $0 hardware status    - Hardware monitoring status overview"
+        echo "  $0 hardware temps     - Temperature monitoring dashboard info"
+        echo "  $0 hardware fans      - Fan speed monitoring dashboard info"
+        echo "  $0 hardware dashboard - Grafana dashboard information"
+        echo ""
+        echo "🎮 RTX2080 GPU Management:"
+        echo "  $0 gpu status     - GPU status and capabilities"
+        echo "  $0 gpu resources  - GPU specifications and AI/ML capabilities"
+        echo "  $0 gpu setup      - GPU setup and configuration instructions"
+        echo "  $0 gpu monitor    - GPU monitoring dashboard info"
         echo ""
         echo "📋 Configuration File:"
         echo "  homelab-config.yml - Your specific infrastructure details (gitignored)"

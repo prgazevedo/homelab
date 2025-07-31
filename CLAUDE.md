@@ -158,9 +158,9 @@ K3S_MODE=remote ./k3s-unified.sh status   # Use Ansible remote execution
 
 # Application management
 ./k3s-unified.sh apps               # List all applications
-./k3s-unified.sh deploy gitea       # Deploy Gitea application
-./k3s-unified.sh logs gitea         # Show application logs
-./k3s-unified.sh backup gitea       # Backup application data
+./k3s-unified.sh deploy <app>       # Deploy applications to K3s
+./k3s-unified.sh logs <app>         # Show application logs
+./k3s-unified.sh backup <app>       # Backup application data
 
 # Monitoring and troubleshooting
 ./k3s-unified.sh metrics            # Show resource usage
@@ -169,8 +169,8 @@ K3S_MODE=remote ./k3s-unified.sh status   # Use Ansible remote execution
 ./k3s-unified.sh network            # Network overview
 
 # Utilities
-./k3s-unified.sh port-forward gitea gitea-http 3000:3000
-./k3s-unified.sh shell gitea <pod-name>
+./k3s-unified.sh port-forward <app> <service> <port>:<port>
+./k3s-unified.sh shell <app> <pod-name>
 ./k3s-unified.sh clean              # Clean up failed pods
 ```
 
@@ -205,7 +205,6 @@ ansible-playbook ansible/playbooks/vm-operations.yml -e "proxmox_password=PASSWO
   - **group_vars/**: Global configuration variables
   - **inventory.yml**: Infrastructure inventory definitions
 - **k3s/**: Kubernetes manifests for cluster applications
-  - **gitea/**: Git service deployment manifests
   - **monitoring/**: Prometheus and Grafana configurations
   - **namespaces/**: Namespace definitions
   - **base/**: Common configurations and kustomizations
