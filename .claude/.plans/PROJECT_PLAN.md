@@ -22,6 +22,7 @@ This is a unified Ansible-based homelab infrastructure project managing a Proxmo
   - ✅ ArgoCD: GitOps platform (K3s) - http://192.168.2.103:30880
   - ✅ Forgejo: Git service (LXC Container) - http://192.168.2.200:3000
   - ✅ Linkding: Bookmark service (Proxmox Host) - http://192.168.2.100:9091 (nginx proxy + Django backend)
+  - ✅ Nextcloud: Cloud file service (Proxmox Host) - http://192.168.2.100:9092 (nginx proxy + PHP-FPM backend)
 - **Hardware Capabilities**:
   - RTX2080 GPU: Available for AI/ML workloads (Container 100 integration pending)
   - ✅ Hardware monitoring: Complete Proxmox thermal and performance monitoring with Grafana dashboard
@@ -30,7 +31,7 @@ This is a unified Ansible-based homelab infrastructure project managing a Proxmo
 - **Infrastructure**: Proxmox VE
 - **Orchestration**: Ansible playbooks
 - **Container Platform**: K3s (lightweight Kubernetes) + LXC containers
-- **Database**: PostgreSQL (K3s), SQLite (Git service, Bookmark service)
+- **Database**: PostgreSQL (K3s), SQLite (Git service, Bookmark service, Nextcloud)
 - **Monitoring**: Prometheus + Grafana (K3s)
 - **GitOps**: ArgoCD (K3s)
 - **Git Service**: Forgejo (LXC Container 200 - 192.168.2.200:3000)
@@ -161,6 +162,21 @@ Steps needed to get the project running locally:
   - [x] Test comprehensive functionality (CSS styling, API access, health checks)
   - [x] Document production architecture and troubleshooting procedures
   - [x] Solve Work Mac IT restrictions with independent bookmark access
+
+### Completed Features (Cloud File Service)
+- [x] **Nextcloud Cloud File Service** - Self-hosted cloud storage and file synchronization
+  - [x] Deploy Nextcloud directly on Proxmox host following Linkding architecture pattern
+  - [x] Implement nginx reverse proxy with PHP-FPM backend (port 9092)
+  - [x] Perform clean Nextcloud installation with SQLite database
+  - [x] Fix nginx routing issues for dashboard and theming CSS endpoints
+  - [x] Configure proper file permissions and PHP-FPM service setup
+  - [x] Create admin account (admin / NextJourney1) with full access
+  - [x] Enable WebDAV API for programmatic file access and applications
+  - [x] Test core functionality (file upload/download, dashboard, theming)
+  - [x] Configure storage directories (/storage/nextcloud-data/, /opt/nextcloud/)
+  - [x] Solve theming CSS rewrite cycles and dashboard 403 forbidden errors
+  - [x] Enable Tailscale remote access for cloud file service
+  - [x] Document WebDAV endpoints for JSONL Claude Code files repository use case
 
 ### RTX2080 AI/ML Integration
 - [ ] **GPU Development Environment** - AI/ML workload framework

@@ -41,6 +41,7 @@ The system works with any Proxmox homelab configuration. Your specific infrastru
   - Forgejo Git: http://192.168.2.200:3000 (prgazevedo / GiteaJourney1)
   - ArgoCD GitOps: http://192.168.2.103:30880 (admin / 5ygoY5iAG1cXmWZw)
   - Linkding Bookmarks: http://192.168.2.100:9091 (book / ProxBook1) - Nginx proxy with CSS/JS
+  - Nextcloud Files: http://192.168.2.100:9092 (admin / NextJourney1) - Cloud storage with WebDAV API
   - K3s Cluster: 3-node operational with local-path storage
 
 **Configuration File:** `homelab-config.yml` (gitignored, contains your specific details)
@@ -109,6 +110,27 @@ curl -s http://192.168.2.200:3000/api/v1/version  # API health check
 ./homelab-unified.sh hardware temps    # Temperature and fan speed dashboard
 ./homelab-unified.sh gpu status        # RTX2080 GPU utilization
 ./homelab-unified.sh gpu resources     # GPU memory and compute usage
+```
+
+### Nextcloud Cloud File Service (Proxmox Host)
+```bash
+# Nextcloud service management
+./homelab-unified.sh nextcloud status      # Nextcloud service status and health
+./homelab-unified.sh nextcloud restart     # Restart Nextcloud services (nginx + PHP-FPM)
+./homelab-unified.sh nextcloud logs        # View Nextcloud and nginx logs
+./homelab-unified.sh nextcloud maintenance # Toggle maintenance mode
+
+# Direct service access
+http://192.168.2.100:9092                  # Nextcloud web interface
+curl -s http://192.168.2.100:9092/status.php  # API health check
+
+# WebDAV API for programmatic access
+http://192.168.2.100:9092/remote.php/dav/  # WebDAV endpoint for apps
+curl -u admin:NextJourney1 http://192.168.2.100:9092/remote.php/dav/files/admin/
+
+# File storage location
+/storage/nextcloud-data/                   # Main data directory
+/opt/nextcloud/                           # Application files
 ```
 
 ### K3s Cluster Management
@@ -213,6 +235,7 @@ ansible-playbook ansible/playbooks/vm-operations.yml -e "proxmox_password=PASSWO
   - **management/**: Daily operational scripts
     - **git/**: Git service (Forgejo) management
     - **k3s/**: K3s cluster management scripts
+    - **nextcloud/**: Nextcloud cloud file service management
     - **infrastructure/**: Infrastructure management scripts
   - **diagnostic/**: Troubleshooting and monitoring
   - **setup/**: Configuration and setup scripts
@@ -471,6 +494,169 @@ curl -H "Authorization: Token YOUR_TOKEN" http://192.168.2.100:9091/api/bookmark
 journalctl -u linkding -f                   # Linkding application logs
 tail -f /var/log/nginx/access.log           # Nginx access logs
 tail -f /var/log/nginx/error.log            # Nginx error logs
+```
+
+## Nextcloud File Service (Proxmox Host)
+
+The Nextcloud file service runs directly on the Proxmox host (192.168.2.100) following the proven Linkding deployment pattern, providing self-hosted cloud storage with full WebDAV API support for remote file access and application integration.
+
+### Architecture Decision: Nginx Proxy + PHP Backend  
+**Service Architecture**: Nginx reverse proxy (port 9092) + Nextcloud PHP backend (internal port 9093)
+- **Frontend (Nginx)**: Serves static files (CSS/JS) directly + reverse proxy to PHP-FPM
+- **Backend (Nextcloud)**: PHP application with PostgreSQL database (internal access only)
+- **Benefits**: Production-grade file serving, security, proper performance optimization
+- **Ports**: External access via 9092, internal PHP-FPM on 9093 (localhost only)
+
+### Current Service Status
+- **Service**: Nextcloud file service with nginx reverse proxy
+- **External Access**: http://192.168.2.100:9092 (nginx proxy)
+- **Internal Backend**: http://127.0.0.1:9093 (PHP-FPM)
+- **Database**: PostgreSQL (nextcloud/NextcloudDB2025!)
+- **Storage**: /storage/nextcloud-data/ (configurable location)
+- **Features**: Web interface, WebDAV API, mobile/desktop sync, file sharing
+
+### Nextcloud Service Management
+```bash
+# Complete deployment (3-step process)
+./homelab-unified.sh nextcloud deploy              # Full deployment automation
+
+# Individual deployment steps (if needed)
+./scripts/setup/deploy-nextcloud-proxmox-host.sh   # Install Nextcloud + dependencies
+./scripts/setup/configure-nginx-nextcloud.sh       # Configure nginx reverse proxy
+./scripts/setup/setup-nextcloud-service.sh         # Setup systemd services
+
+# Service management
+./homelab-unified.sh nextcloud status              # Service status and connectivity
+./homelab-unified.sh nextcloud health              # Comprehensive health check
+./homelab-unified.sh nextcloud logs                # View service logs
+./homelab-unified.sh nextcloud restart             # Restart all services
+./homelab-unified.sh nextcloud backup              # Create complete backup
+
+# Advanced management
+./homelab-unified.sh nextcloud occ status          # Nextcloud occ commands
+./homelab-unified.sh nextcloud test-api            # Test WebDAV API functionality
+```
+
+### Nextcloud Service Access
+```bash
+# Web Interface (PRODUCTION - Use this URL)
+http://192.168.2.100:9092                         # Nginx proxy with proper performance
+# Initial setup required - create admin user via web interface
+
+# Tailscale Access (Remote access)
+http://TAILSCALE_IP:9092                           # Same interface via Tailscale
+
+# Internal Backend (Debugging only)
+http://127.0.0.1:9093                             # Direct PHP-FPM (localhost only)
+
+# WebDAV API (After initial setup)
+http://192.168.2.100:9092/remote.php/dav/files/USERNAME/
+# Use for programmatic file operations, mobile apps, desktop sync
+
+# Health Check
+http://192.168.2.100:9092/nginx-health            # Nginx proxy health status
+```
+
+### WebDAV API Integration
+```bash
+# File Operations (replace USERNAME:PASSWORD with actual credentials)
+# Upload file
+curl -u 'USERNAME:PASSWORD' -T local_file.txt \
+     'http://192.168.2.100:9092/remote.php/dav/files/USERNAME/remote_file.txt'
+
+# Download file  
+curl -u 'USERNAME:PASSWORD' \
+     'http://192.168.2.100:9092/remote.php/dav/files/USERNAME/remote_file.txt' \
+     -o downloaded_file.txt
+
+# Create folder
+curl -u 'USERNAME:PASSWORD' -X MKCOL \
+     'http://192.168.2.100:9092/remote.php/dav/files/USERNAME/new_folder/'
+
+# List files (returns XML)
+curl -u 'USERNAME:PASSWORD' -X PROPFIND \
+     'http://192.168.2.100:9092/remote.php/dav/files/USERNAME/' -H "Depth: 1"
+
+# Claude Code JSONL storage example
+curl -u 'USERNAME:PASSWORD' -T claude_session.jsonl \
+     'http://192.168.2.100:9092/remote.php/dav/files/USERNAME/claude-code/session.jsonl'
+```
+
+### Working Architecture Details
+```bash
+# Nginx Configuration (Port 9092)
+/etc/nginx/sites-available/nextcloud              # Nginx site configuration
+/etc/nginx/sites-enabled/nextcloud                # Enabled site symlink
+
+# Nextcloud Configuration
+/opt/nextcloud/                                    # Application directory
+/opt/nextcloud/config/config.php                  # Main configuration
+/storage/nextcloud-data/                           # User files (configurable)
+/etc/systemd/system/nextcloud-cron.service        # Background tasks service
+
+# Service Architecture
+Nginx (0.0.0.0:9092)          # External access, static files, reverse proxy
+  ↓ FastCGI proxy for PHP
+PHP-FPM (127.0.0.1:9093)      # Internal PHP application
+  ↓ Database connection
+PostgreSQL (localhost:5432)    # Database backend (nextcloud database)
+```
+
+### Use Case Examples
+
+#### Remote File Access
+- **Web Interface**: Full-featured file manager accessible from any browser
+- **Mobile Apps**: Official Nextcloud apps for iOS/Android with Tailscale connectivity
+- **Desktop Sync**: Nextcloud desktop client for automatic folder synchronization
+- **Video Streaming**: Built-in media player for video files with direct streaming
+
+#### Application Integration
+- **Claude Code Files**: Centralized JSONL file repository via WebDAV API
+- **Automated Backups**: Scripts can upload backup files programmatically
+- **Development Files**: Shared code and document storage accessible from any environment
+- **Media Library**: Video and document storage with remote access capabilities
+
+### Client Configuration
+```bash
+# Desktop Client Setup
+Server URL: http://192.168.2.100:9092
+Username: [created during web setup]
+Password: [app password recommended]
+
+# Mobile App Setup  
+Server: http://192.168.2.100:9092
+# For Tailscale remote access: http://TAILSCALE_IP:9092
+
+# Browser Extension/Apps
+Use app passwords for enhanced security
+Generate via: Settings → Personal → Security → App passwords
+```
+
+### Service Features
+- **Production-Grade Performance**: Nginx handles static files, PHP-FPM optimized for Nextcloud
+- **Cross-Platform Access**: Web, mobile, desktop clients with proper CSS/JS rendering
+- **WebDAV API**: Full REST API for programmatic file operations and integration
+- **Remote Access**: Tailscale integration for secure access from anywhere
+- **File Sharing**: Public links, user sharing, folder permissions
+- **Versioning**: File history and conflict resolution
+- **Media Handling**: Video streaming, image galleries, document preview
+- **Backup-Friendly**: Complete backup automation with data, config, and database
+
+### Service Monitoring and Maintenance
+```bash
+# Health Checks
+./scripts/diagnostic/diagnose-nextcloud-service.sh # Comprehensive diagnostics
+./scripts/diagnostic/test-nextcloud-webdav.sh      # API functionality testing
+
+# Service Logs
+journalctl -u php8.1-fpm -f                       # PHP-FPM logs
+tail -f /var/log/nginx/error.log                  # Nginx error logs
+tail -f /opt/nextcloud/data/nextcloud.log         # Nextcloud application logs
+
+# Performance Monitoring
+./homelab-unified.sh nextcloud occ status         # Nextcloud internal status
+systemctl status nextcloud-cron.timer             # Background tasks status
+du -sh /storage/nextcloud-data/                   # Storage usage
 ```
 
 ## Git Service Management (LXC Container)

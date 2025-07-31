@@ -213,6 +213,72 @@ case "$ACTION" in
         esac
         ;;
         
+    "nextcloud")
+        NEXTCLOUD_COMMAND="${2:-status}"
+        case $NEXTCLOUD_COMMAND in
+            "deploy")
+                echo "🌐 Deploying Nextcloud file service to Proxmox host..."
+                echo "This will install Nextcloud with nginx reverse proxy (following Linkding pattern)"
+                echo ""
+                echo "Step 1: Installing Nextcloud application and dependencies..."
+                ./scripts/setup/deploy-nextcloud-proxmox-host.sh
+                echo ""
+                echo "Step 2: Configuring nginx reverse proxy..."
+                ./scripts/setup/configure-nginx-nextcloud.sh
+                echo ""
+                echo "Step 3: Setting up systemd services..."
+                ./scripts/setup/setup-nextcloud-service.sh
+                echo ""
+                echo "✅ Nextcloud deployment complete!"
+                echo "Next: Open http://192.168.2.100:9092 to complete web setup"
+                ;;
+            "status")
+                echo "📊 Checking Nextcloud service status..."
+                ./scripts/management/infrastructure/nextcloud-manager.sh status
+                ;;
+            "health")
+                echo "🔍 Running comprehensive Nextcloud health check..."
+                ./scripts/diagnostic/diagnose-nextcloud-service.sh
+                ;;
+            "logs")
+                echo "📋 Viewing Nextcloud service logs..."
+                ./scripts/management/infrastructure/nextcloud-manager.sh logs
+                ;;
+            "restart")
+                echo "🔄 Restarting Nextcloud services..."
+                ./scripts/management/infrastructure/nextcloud-manager.sh restart
+                ;;
+            "backup")
+                echo "💾 Creating Nextcloud backup..."
+                ./scripts/management/infrastructure/nextcloud-manager.sh backup
+                ;;
+            "access")
+                echo "🌐 Nextcloud access information..."
+                ./scripts/management/infrastructure/nextcloud-manager.sh access
+                ;;
+            "test-api")
+                echo "🧪 Testing Nextcloud WebDAV API..."
+                echo "Note: Update credentials in script after initial setup"
+                ./scripts/diagnostic/test-nextcloud-webdav.sh
+                ;;
+            "occ")
+                if [ $# -lt 3 ]; then
+                    echo "Usage: $0 nextcloud occ <command>"
+                    echo "Example: $0 nextcloud occ status"
+                    exit 1
+                fi
+                shift 2
+                echo "🔧 Running Nextcloud occ command: $*"
+                ./scripts/management/infrastructure/nextcloud-manager.sh occ "$@"
+                ;;
+            *)
+                echo "❌ Unknown nextcloud command: $NEXTCLOUD_COMMAND"
+                echo "Available commands: deploy, status, health, logs, restart, backup, access, test-api, occ"
+                exit 1
+                ;;
+        esac
+        ;;
+        
     "help")
         echo "Unified Homelab Management Commands:"
         echo ""
@@ -264,6 +330,17 @@ case "$ACTION" in
         echo "  $0 linkding create-user  - Create admin user account"
         echo "  $0 linkding backup       - Backup bookmark data"
         echo "  $0 linkding logs         - View service logs"
+        echo ""
+        echo "🌐 Nextcloud File Service:"
+        echo "  $0 nextcloud deploy      - Deploy Nextcloud service to Proxmox host"
+        echo "  $0 nextcloud status      - Check Nextcloud service status and connectivity"
+        echo "  $0 nextcloud health      - Run comprehensive health check and diagnostics"
+        echo "  $0 nextcloud access      - Show access URLs and WebDAV API info"
+        echo "  $0 nextcloud test-api    - Test WebDAV API functionality"
+        echo "  $0 nextcloud backup      - Create backup of data and configuration"
+        echo "  $0 nextcloud logs        - View service logs"
+        echo "  $0 nextcloud restart     - Restart all Nextcloud services"
+        echo "  $0 nextcloud occ <cmd>   - Run Nextcloud occ command"
         echo ""
         echo "📋 Configuration File:"
         echo "  homelab-config.yml - Your specific infrastructure details (gitignored)"
